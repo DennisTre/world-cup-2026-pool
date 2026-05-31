@@ -60,6 +60,9 @@ function showToast(msg, isError) {
     setTimeout(() => t.remove(), 3000);
 }
 
+let adminDraftLogs = [];
+let adminDraftSettings = {};
+
 // ---- LISTENERS ----
 function initAdminListeners() {
     db.collection('players').onSnapshot(snap => {
@@ -81,6 +84,20 @@ function initAdminListeners() {
     db.collection('site_settings').doc('metadata').onSnapshot(doc => {
         adminSettings = doc.exists ? doc.data() : {};
         renderAdminSettings();
+    });
+
+    // Draft audit log listener
+    db.collection('draft_log').orderBy('timestamp', 'desc').onSnapshot(snap => {
+        adminDraftLogs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        renderDraftAuditLog();
+        renderDraftBadge();
+    });
+
+    // Draft settings listener
+    db.collection('site_settings').doc('draft').onSnapshot(doc => {
+        adminDraftSettings = doc.exists ? doc.data() : {};
+        renderDraftLockStatus();
+        renderDraftBadge();
     });
 }
 
@@ -413,6 +430,262 @@ document.getElementById('settingsForm').addEventListener('submit', async e => {
             lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
         showToast('Settings saved');
+    } catch (err) {
+        showToast('Error: ' + err.message, true);
+    }
+});
+
+// ============ TIERED DRAFT LOTTERY ============
+
+/** Draft tier definitions — exactly 12 teams per tier, 48 total */
+const DRAFT_TIERS = {
+    1: ["France","Spain","England","Colombia","Argentina","Portugal","Brazil","Netherlands","Germany","Croatia","Belgium","USA"],
+    2: ["Morocco","Mexico","Uruguay","Norway","Ecuador","Japan","Switzerland","Korea Republic","Türkiye","Canada","Senegal","Austria"],
+    3: ["Sweden","Paraguay","Scotland","Ghana","Czechia","IR Iran","Saudi Arabia","Bosnia and Herzegovina","Algeria","Egypt","Côte d'Ivoire","Australia"],
+    4: ["Jordan","Tunisia","Congo DR","Uzbekistan","Qatar","Iraq","New Zealand","Cabo Verde","South Africa","Panama","Curaçao","Haiti"]
+};
+
+/** Fisher-Yates shuffle */
+function shuffleArray(arr) {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+}
+
+/** Run the tiered draft: shuffle each tier, assign one per player from each tier */
+function generateDraft(playerList) {
+    const t1 = shuffleArray(DRAFT_TIERS[1]);
+    const t2 = shuffleArray(DRAFT_TIERS[2]);
+    const t3 = shuffleArray(DRAFT_TIERS[3]);
+    const t4 = shuffleArray(DRAFT_TIERS[4]);
+
+    return playerList.map((p, i) => ({
+        playerId: p.id,
+        ownerName: p.ownerName,
+        teamName: p.teamName,
+        countries: [t1[i], t2[i], t3[i], t4[i]]
+    }));
+}
+
+/** Show a custom confirmation modal, returns a Promise<boolean> */
+function showConfirmModal(title, text) {
+    return new Promise(resolve => {
+        document.getElementById('confirmModalTitle').textContent = title;
+        document.getElementById('confirmModalText').textContent = text;
+        document.getElementById('confirmModal').style.display = 'flex';
+        const yesBtn = document.getElementById('confirmModalYes');
+        const handler = () => {
+            document.getElementById('confirmModal').style.display = 'none';
+            yesBtn.removeEventListener('click', handler);
+            resolve(true);
+        };
+        yesBtn.addEventListener('click', handler);
+        // Cancel closes via inline onclick, resolve false on overlay click
+        document.getElementById('confirmModal').addEventListener('click', function cancelHandler(e) {
+            if (e.target === document.getElementById('confirmModal')) {
+                document.getElementById('confirmModal').style.display = 'none';
+                document.getElementById('confirmModal').removeEventListener('click', cancelHandler);
+                resolve(false);
+            }
+        });
+    });
+}
+
+/** Show draft results in a modal */
+function showDraftResultsModal(results, runNumber) {
+    const body = document.getElementById('draftModalBody');
+    document.getElementById('draftModalTitle').textContent = `Draft Run #${runNumber} Results`;
+    body.innerHTML = results.map(r => `
+        <div class="draft-result-player">
+            <div class="draft-result-name">${r.ownerName} — ${r.teamName}</div>
+            <div class="draft-result-teams">
+                ${r.countries.map((c, i) => `<div class="draft-result-team"><span class="flag">${getFlag(c)}</span> ${c} <span class="draft-result-tier">TIER ${i+1}</span></div>`).join('')}
+            </div>
+        </div>
+    `).join('');
+    document.getElementById('draftModal').style.display = 'flex';
+}
+
+/** Render draft audit log */
+function renderDraftAuditLog() {
+    const el = document.getElementById('draftAuditLog');
+    if (!el) return;
+    if (!adminDraftLogs.length) {
+        el.innerHTML = '<p class="empty-state">No draft runs yet.</p>';
+        return;
+    }
+    el.innerHTML = adminDraftLogs.map(log => {
+        const ts = log.timestamp?.toDate ? log.timestamp.toDate() : new Date(log.timestamp);
+        const timeStr = ts.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+        return `
+        <div class="draft-log-entry">
+            <div class="draft-log-header">
+                <span class="draft-log-run">Draft Run #${log.runNumber}</span>
+                <span class="draft-log-time">${timeStr}</span>
+            </div>
+            <div class="draft-log-admin">by ${log.adminEmail || 'admin'}</div>
+        </div>`;
+    }).join('');
+}
+
+/** Render draft runs badge */
+function renderDraftBadge() {
+    const el = document.getElementById('draftRunsBadge');
+    if (!el) return;
+    const count = adminDraftLogs.length;
+    el.textContent = count > 0 ? `Draft Lottery Runs: ${count}` : '';
+}
+
+/** Render draft lock status and disable/enable buttons */
+function renderDraftLockStatus() {
+    const el = document.getElementById('draftLockStatus');
+    const runBtn = document.getElementById('runDraftBtn');
+    const clearBtn = document.getElementById('clearDraftBtn');
+    const lockBtn = document.getElementById('lockDraftBtn');
+    if (!el) return;
+
+    const isLocked = adminDraftSettings.draftLocked === true;
+    const runs = adminDraftLogs.length;
+
+    if (isLocked) {
+        el.className = 'draft-lock-status locked';
+        el.textContent = `Draft Locked After ${runs} Run${runs !== 1 ? 's' : ''}`;
+        if (runBtn) runBtn.disabled = true;
+        if (clearBtn) clearBtn.disabled = true;
+        if (lockBtn) lockBtn.textContent = 'Unlock Draft';
+    } else {
+        if (runs > 0) {
+            el.className = 'draft-lock-status unlocked';
+            el.textContent = 'Draft Unlocked';
+        } else {
+            el.className = 'draft-lock-status';
+            el.style.display = 'none';
+        }
+        if (runBtn) runBtn.disabled = false;
+        if (clearBtn) clearBtn.disabled = false;
+        if (lockBtn) lockBtn.textContent = 'Lock Draft';
+    }
+}
+
+/** Run Draft button handler */
+document.getElementById('runDraftBtn').addEventListener('click', async () => {
+    if (adminDraftSettings.draftLocked) {
+        showToast('Draft is locked. Unlock first.', true);
+        return;
+    }
+
+    if (adminPlayers.length !== 12) {
+        showToast(`Need exactly 12 players. Currently have ${adminPlayers.length}.`, true);
+        return;
+    }
+
+    const confirmed = await showConfirmModal(
+        'Run Tiered Draft Lottery',
+        'This will clear all current team assignments and randomly generate a new tiered draft. Continue?'
+    );
+    if (!confirmed) return;
+
+    try {
+        showToast('Running draft...');
+
+        // Generate the draft
+        const results = generateDraft(adminPlayers);
+
+        // Snapshot ranks before changes
+        await snapshotRanksAndRecalculate(db);
+
+        // Batch update all player country assignments
+        const batch = db.batch();
+        results.forEach(r => {
+            batch.update(db.collection('players').doc(r.playerId), {
+                countries: r.countries
+            });
+        });
+        await batch.commit();
+
+        // Recalculate scores
+        await recalculateAllPlayerScores(db);
+
+        // Determine run number
+        const runNumber = adminDraftLogs.length + 1;
+
+        // Log to draft_log collection
+        const user = auth.currentUser;
+        await db.collection('draft_log').add({
+            runNumber: runNumber,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+            adminEmail: user ? user.email : 'unknown',
+            results: results.map(r => ({ ownerName: r.ownerName, teamName: r.teamName, countries: r.countries }))
+        });
+
+        // Update draft run count in site_settings
+        await db.collection('site_settings').doc('draft').set({
+            totalRuns: runNumber,
+            draftLocked: adminDraftSettings.draftLocked || false,
+            lastDraftTimestamp: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        updateLastUpdated(db);
+
+        // Show results modal
+        showDraftResultsModal(results, runNumber);
+        showToast('Draft complete! Assignments saved.');
+    } catch (err) {
+        showToast('Error: ' + err.message, true);
+    }
+});
+
+/** Clear All Assignments button handler */
+document.getElementById('clearDraftBtn').addEventListener('click', async () => {
+    if (adminDraftSettings.draftLocked) {
+        showToast('Draft is locked. Unlock first.', true);
+        return;
+    }
+
+    const confirmed = await showConfirmModal(
+        'Clear All Assignments',
+        'This will remove all team assignments from every player. Continue?'
+    );
+    if (!confirmed) return;
+
+    try {
+        const batch = db.batch();
+        adminPlayers.forEach(p => {
+            batch.update(db.collection('players').doc(p.id), { countries: [] });
+        });
+        await batch.commit();
+        await recalculateAllPlayerScores(db);
+        updateLastUpdated(db);
+        showToast('All assignments cleared.');
+    } catch (err) {
+        showToast('Error: ' + err.message, true);
+    }
+});
+
+/** Lock/Unlock Draft button handler */
+document.getElementById('lockDraftBtn').addEventListener('click', async () => {
+    const isCurrentlyLocked = adminDraftSettings.draftLocked === true;
+    const action = isCurrentlyLocked ? 'Unlock' : 'Lock';
+    const runs = adminDraftLogs.length;
+
+    const confirmed = await showConfirmModal(
+        `${action} Draft`,
+        isCurrentlyLocked
+            ? 'This will unlock the draft, allowing new draft runs and assignment changes. Continue?'
+            : `This will lock the draft after ${runs} run${runs !== 1 ? 's' : ''}. No team assignments can be changed until unlocked. Continue?`
+    );
+    if (!confirmed) return;
+
+    try {
+        await db.collection('site_settings').doc('draft').set({
+            draftLocked: !isCurrentlyLocked,
+            totalRuns: runs,
+            lastDraftTimestamp: adminDraftSettings.lastDraftTimestamp || null
+        }, { merge: true });
+        showToast(`Draft ${isCurrentlyLocked ? 'unlocked' : 'locked'}.`);
     } catch (err) {
         showToast('Error: ' + err.message, true);
     }
