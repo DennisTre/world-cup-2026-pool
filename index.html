@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>World Cup 2026 Pool</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#0a0e1a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+</head>
+<body>
+    <header class="site-header">
+        <div class="header-inner container">
+            <div class="logo-area">
+                <img src="assets/images/logo.png" alt="World Cup 2026 Pool" class="site-logo" onerror="this.style.display='none'">
+                <div class="logo-text">
+                    <h1>WORLD CUP 2026</h1>
+                    <span class="logo-subtitle">THE POOL</span>
+                </div>
+            </div>
+            <nav class="main-nav">
+                <button class="nav-toggle" aria-label="Toggle navigation">☰</button>
+                <ul class="nav-links">
+                    <li><a href="#leaderboard">Standings</a></li>
+                    <li><a href="#players">Players</a></li>
+                    <li><a href="#alive">Alive</a></li>
+                    <li><a href="#matches">Matches</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <!-- HERO / CURRENT LEADER -->
+    <section class="hero-section" id="hero">
+        <div class="hero-bg">
+            <img src="assets/images/hero-bg.jpg" alt="" class="hero-bg-img" onerror="this.style.display='none'">
+            <div class="hero-overlay"></div>
+        </div>
+        <div class="hero-content container">
+            <div class="hero-trophy">
+                <img src="assets/images/trophy.png" alt="Trophy" class="trophy-img" onerror="this.innerHTML='🏆'">
+            </div>
+            <div class="hero-leader">
+                <span class="hero-label">CURRENT LEADER</span>
+                <h2 class="hero-team-name" id="heroTeamName">—</h2>
+                <p class="hero-owner" id="heroOwner">—</p>
+                <div class="hero-points">
+                    <span class="hero-points-value" id="heroPoints">0</span>
+                    <span class="hero-points-label">POINTS</span>
+                </div>
+                <div class="hero-flags" id="heroFlags"></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SUMMARY DASHBOARD -->
+    <section class="section summary-section" id="summary">
+        <div class="container">
+            <div class="summary-grid" id="summaryGrid">
+                <div class="summary-card">
+                    <span class="summary-value" id="sumPlayers">0</span>
+                    <span class="summary-label">PLAYERS</span>
+                </div>
+                <div class="summary-card">
+                    <span class="summary-value" id="sumAlive">0</span>
+                    <span class="summary-label">ALIVE</span>
+                </div>
+                <div class="summary-card">
+                    <span class="summary-value" id="sumPoints">0</span>
+                    <span class="summary-label">POOL PTS</span>
+                </div>
+                <div class="summary-card summary-stage">
+                    <span class="summary-value" id="sumStage">—</span>
+                    <span class="summary-label">STAGE</span>
+                </div>
+            </div>
+            <div class="last-updated" id="lastUpdated"></div>
+        </div>
+    </section>
+
+    <!-- LEADERBOARD -->
+    <section class="section leaderboard-section" id="leaderboard">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">LEADERBOARD</h2>
+                <div class="section-line"></div>
+            </div>
+            <!-- Mobile: card-based leaderboard -->
+            <div class="leaderboard-cards" id="leaderboardCards"></div>
+            <!-- Desktop: table leaderboard -->
+            <div class="leaderboard-table-wrap">
+                <table class="leaderboard-table" id="leaderboardTable">
+                    <thead>
+                        <tr>
+                            <th class="col-rank">#</th>
+                            <th class="col-movement"></th>
+                            <th class="col-team">TEAM</th>
+                            <th class="col-owner">OWNER</th>
+                            <th class="col-countries">COUNTRIES</th>
+                            <th class="col-points">PTS</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leaderboardBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- PLAYER CARDS -->
+    <section class="section players-section" id="players">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">PLAYER CARDS</h2>
+                <div class="section-line"></div>
+            </div>
+            <div class="player-cards-grid" id="playerCardsGrid"></div>
+        </div>
+    </section>
+
+    <!-- COUNTRIES STILL ALIVE -->
+    <section class="section alive-section" id="alive">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">COUNTRIES STILL ALIVE</h2>
+                <div class="section-line"></div>
+            </div>
+            <div class="alive-grid" id="aliveGrid"></div>
+        </div>
+    </section>
+
+    <!-- RACE FOR THE CUP -->
+    <section class="section race-section" id="race">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">RACE FOR THE CUP</h2>
+                <div class="section-line"></div>
+            </div>
+            <div class="race-bars" id="raceBars"></div>
+        </div>
+    </section>
+
+    <!-- RECENT ACTIVITY FEED -->
+    <section class="section activity-section" id="activity">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">RECENT ACTIVITY</h2>
+                <div class="section-line"></div>
+            </div>
+            <div class="activity-feed" id="activityFeed"></div>
+        </div>
+    </section>
+
+    <!-- UPCOMING MATCHES -->
+    <section class="section matches-section" id="matches">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">UPCOMING MATCHES</h2>
+                <div class="section-line"></div>
+            </div>
+            <div class="matches-list" id="matchesList"></div>
+        </div>
+    </section>
+
+    <!-- POINTS SYSTEM -->
+    <section class="section points-section" id="pointsSystem">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">POINTS SYSTEM</h2>
+                <div class="section-line"></div>
+            </div>
+            <div class="points-grid">
+                <div class="points-card">
+                    <h3 class="points-card-title">MATCH POINTS</h3>
+                    <div class="points-item"><span class="points-icon">✅</span><span class="points-label">Win</span><span class="points-value">2 PTS</span></div>
+                    <div class="points-item"><span class="points-icon">🤝</span><span class="points-label">Draw</span><span class="points-value">1 PT</span></div>
+                    <div class="points-item"><span class="points-icon">❌</span><span class="points-label">Loss</span><span class="points-value">0 PTS</span></div>
+                </div>
+                <div class="points-card">
+                    <h3 class="points-card-title">BONUS POINTS</h3>
+                    <div class="points-item"><span class="points-stage">R32</span><span class="points-label">Round of 32</span><span class="points-value">2 PTS</span></div>
+                    <div class="points-item"><span class="points-stage">R16</span><span class="points-label">Round of 16</span><span class="points-value">3 PTS</span></div>
+                    <div class="points-item"><span class="points-stage">QF</span><span class="points-label">Quarterfinals</span><span class="points-value">4 PTS</span></div>
+                    <div class="points-item"><span class="points-stage">SF</span><span class="points-label">Semifinals</span><span class="points-value">5 PTS</span></div>
+                    <div class="points-item"><span class="points-stage">F</span><span class="points-label">Final</span><span class="points-value">6 PTS</span></div>
+                    <div class="points-item champion"><span class="points-stage trophy">🏆</span><span class="points-label">Win World Cup</span><span class="points-value">8 PTS</span></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer class="site-footer">
+        <div class="container">
+            <p>World Cup 2026 Pool &mdash; Private League</p>
+        </div>
+    </footer>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+
+    <script src="js/firebase-config.js"></script>
+    <script src="js/flags.js"></script>
+    <script src="js/scoring.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

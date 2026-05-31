@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Admin — World Cup 2026 Pool</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/admin.css">
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#0a0e1a">
+</head>
+<body>
+    <header class="site-header">
+        <div class="header-inner container">
+            <div class="logo-area">
+                <div class="logo-text">
+                    <h1>WORLD CUP 2026</h1>
+                    <span class="logo-subtitle">ADMIN PANEL</span>
+                </div>
+            </div>
+            <nav class="main-nav">
+                <a href="index.html" class="nav-back">&larr; Back</a>
+                <button class="btn btn-outline" id="logoutBtn" style="display:none;">Logout</button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- LOGIN -->
+    <section class="section" id="loginSection">
+        <div class="container">
+            <div class="admin-login-card">
+                <h2>Admin Login</h2>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="loginEmail" required autocomplete="email">
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="loginPassword" required autocomplete="current-password">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full">Login</button>
+                    <p class="login-error" id="loginError"></p>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <!-- ADMIN DASHBOARD -->
+    <section class="section" id="adminDashboard" style="display:none;">
+        <div class="container">
+            <div class="admin-tabs">
+                <button class="admin-tab active" data-tab="matches">Matches</button>
+                <button class="admin-tab" data-tab="countries">Countries</button>
+                <button class="admin-tab" data-tab="players">Players</button>
+                <button class="admin-tab" data-tab="settings">Settings</button>
+            </div>
+
+            <!-- MATCHES TAB (primary — first tab) -->
+            <div class="admin-panel" id="tab-matches">
+                <h3>Match Results</h3>
+                <p class="admin-note">Mark a match completed with scores. Country stats, pool points, player scores, rankings, and activity feed all update automatically.</p>
+
+                <div id="adminPendingMatches"></div>
+
+                <h4>Completed Matches</h4>
+                <div id="adminCompletedMatches"></div>
+
+                <h4>Add New Match</h4>
+                <form id="matchForm" class="admin-form">
+                    <input type="hidden" id="matchId">
+                    <div class="form-row">
+                        <div class="form-group"><label>Home Team</label><input type="text" id="matchHome" required></div>
+                        <div class="form-group"><label>Away Team</label><input type="text" id="matchAway" required></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label>Date &amp; Time</label><input type="datetime-local" id="matchDatetime" required></div>
+                        <div class="form-group">
+                            <label>Round</label>
+                            <select id="matchRound">
+                                <option value="Group">Group Stage</option>
+                                <option value="R32">Round of 32</option>
+                                <option value="R16">Round of 16</option>
+                                <option value="QF">Quarterfinals</option>
+                                <option value="SF">Semifinals</option>
+                                <option value="F">Final</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label>Home Score</label><input type="number" id="matchHomeScore" min="0"></div>
+                        <div class="form-group"><label>Away Score</label><input type="number" id="matchAwayScore" min="0"></div>
+                        <div class="form-group">
+                            <label>Completed</label>
+                            <select id="matchCompleted">
+                                <option value="false">No</option>
+                                <option value="true">Yes</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Save Match</button>
+                        <button type="button" class="btn btn-outline" id="clearMatchForm">Clear</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- COUNTRIES TAB -->
+            <div class="admin-panel" id="tab-countries" style="display:none;">
+                <h3>Manage Countries</h3>
+                <p class="admin-note">Stats update automatically from match results. Use this to manually adjust or set elimination status.</p>
+                <div id="adminCountriesList"></div>
+
+                <h4>Add / Edit Country</h4>
+                <form id="countryForm" class="admin-form">
+                    <input type="hidden" id="countryId">
+                    <div class="form-row">
+                        <div class="form-group"><label>Country Name *</label><input type="text" id="countryName" required></div>
+                        <div class="form-group">
+                            <label>Status</label>
+                            <select id="countryEliminated">
+                                <option value="false">Alive</option>
+                                <option value="true">Eliminated</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label>Wins</label><input type="number" id="countryWins" value="0" min="0"></div>
+                        <div class="form-group"><label>Draws</label><input type="number" id="countryDraws" value="0" min="0"></div>
+                        <div class="form-group"><label>Losses</label><input type="number" id="countryLosses" value="0" min="0"></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label>GF</label><input type="number" id="countryGF" value="0" min="0"></div>
+                        <div class="form-group"><label>GA</label><input type="number" id="countryGA" value="0" min="0"></div>
+                        <div class="form-group"><label>Pool Pts</label><input type="number" id="countryPoolPoints" value="0" min="0"></div>
+                    </div>
+                    <p class="form-validation-error" id="countryValidationError"></p>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Save Country</button>
+                        <button type="button" class="btn btn-outline" id="clearCountryForm">Clear</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- PLAYERS TAB -->
+            <div class="admin-panel" id="tab-players" style="display:none;">
+                <h3>Manage Players</h3>
+                <p class="admin-note">Points are auto-calculated from assigned country pool points.</p>
+                <div id="adminPlayersList"></div>
+
+                <h4>Add / Edit Player</h4>
+                <form id="playerForm" class="admin-form">
+                    <input type="hidden" id="playerId">
+                    <div class="form-row">
+                        <div class="form-group"><label>Owner Name *</label><input type="text" id="playerOwner" required></div>
+                        <div class="form-group"><label>Team Name *</label><input type="text" id="playerTeam" required></div>
+                    </div>
+                    <div class="form-group">
+                        <label>Countries * (comma separated)</label>
+                        <input type="text" id="playerCountries" placeholder="Brazil, Argentina, France" required>
+                    </div>
+                    <p class="form-validation-error" id="playerValidationError"></p>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Save Player</button>
+                        <button type="button" class="btn btn-outline" id="clearPlayerForm">Clear</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- SETTINGS TAB -->
+            <div class="admin-panel" id="tab-settings" style="display:none;">
+                <h3>Tournament Settings</h3>
+                <form id="settingsForm" class="admin-form">
+                    <div class="form-group">
+                        <label>Tournament Stage</label>
+                        <select id="settingsTournamentStage">
+                            <option value="Group">Group Stage</option>
+                            <option value="R32">Round of 32</option>
+                            <option value="R16">Round of 16</option>
+                            <option value="QF">Quarterfinals</option>
+                            <option value="SF">Semifinals</option>
+                            <option value="F">Final</option>
+                        </select>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Save Settings</button>
+                    </div>
+                </form>
+                <div class="admin-note" style="margin-top:16px;" id="settingsLastUpdated"></div>
+
+                <h4>Seed Sample Data</h4>
+                <p class="admin-note">Load sample data for 10 players. Player points auto-calculate.</p>
+                <button class="btn btn-outline" id="seedDataBtn">Load Sample Data</button>
+                <div id="seedStatus" style="margin-top:12px;"></div>
+            </div>
+        </div>
+    </section>
+
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+    <script src="js/firebase-config.js"></script>
+    <script src="js/flags.js"></script>
+    <script src="js/scoring.js"></script>
+    <script src="js/admin.js"></script>
+</body>
+</html>
