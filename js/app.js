@@ -11,6 +11,7 @@ let countriesData = [];
 let matchesData = [];
 let activityData = [];
 let siteSettings = {};
+let draftSettings = {};
 
 // ---- NAV TOGGLE ----
 document.querySelector('.nav-toggle').addEventListener('click', () => {
@@ -59,6 +60,12 @@ function initListeners() {
         siteSettings = doc.exists ? doc.data() : {};
         renderLastUpdated();
         renderSummary();
+    });
+
+    // Draft settings listener (public transparency)
+    db.collection('site_settings').doc('draft').onSnapshot(doc => {
+        draftSettings = doc.exists ? doc.data() : {};
+        renderDraftStatus();
     });
 }
 
@@ -289,6 +296,37 @@ function renderMatches() {
             <div><div class="match-time">${time}</div><div class="match-round">${m.round || 'Group'}</div></div>
         </div>`;
     }).join('');
+}
+
+// ---- DRAFT LOTTERY STATUS (public) ----
+function renderDraftStatus() {
+    const runsEl = document.getElementById('pubDraftRuns');
+    const lockedEl = document.getElementById('pubDraftLocked');
+    const footerEl = document.getElementById('pubDraftFooter');
+    const sectionEl = document.getElementById('draftStatus');
+    if (!runsEl) return;
+
+    const runs = draftSettings.totalRuns || 0;
+    const locked = draftSettings.draftLocked === true;
+
+    // Hide section if no drafts have been run
+    if (runs === 0 && !locked) {
+        if (sectionEl) sectionEl.style.display = 'none';
+        return;
+    }
+    if (sectionEl) sectionEl.style.display = '';
+
+    runsEl.textContent = runs;
+    lockedEl.textContent = locked ? 'Yes' : 'No';
+    lockedEl.style.color = locked ? 'var(--green)' : 'var(--gold)';
+
+    if (locked) {
+        footerEl.textContent = `Draft Locked After ${runs} Run${runs !== 1 ? 's' : ''}`;
+        footerEl.style.color = 'var(--green)';
+    } else {
+        footerEl.textContent = 'Draft is not yet locked';
+        footerEl.style.color = 'var(--text-muted)';
+    }
 }
 
 // ---- INIT ----
