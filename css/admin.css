@@ -123,6 +123,63 @@
 .status-completed { color: var(--green); font-size: 0.75rem; font-weight: 600; }
 .status-pending { color: var(--text-muted); font-size: 0.75rem; }
 
+/* Draft */
+.draft-status-badge {
+    font-family: var(--font-display); font-size: 0.8rem; color: var(--gold);
+    letter-spacing: 1px; margin-bottom: 8px;
+}
+.draft-lock-status {
+    font-size: 0.8rem; font-weight: 600; margin-bottom: 12px;
+    padding: 8px 12px; border-radius: var(--radius); display: none;
+}
+.draft-lock-status.locked {
+    display: block; background: var(--red-muted); color: var(--red);
+    border: 1px solid var(--red);
+}
+.draft-lock-status.unlocked {
+    display: block; background: var(--green-muted); color: var(--green);
+    border: 1px solid var(--green);
+}
+.draft-actions { margin-bottom: 16px; }
+
+.draft-log-entry {
+    background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px; margin-bottom: 6px;
+}
+.draft-log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.draft-log-run { font-family: var(--font-display); font-weight: 700; color: var(--gold); font-size: 0.85rem; }
+.draft-log-time { font-size: 0.7rem; color: var(--text-muted); }
+.draft-log-admin { font-size: 0.7rem; color: var(--text-secondary); }
+
+/* Modal */
+.modal-overlay {
+    position: fixed; inset: 0; z-index: 2000;
+    background: rgba(0,0,0,0.8); backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px; overflow-y: auto;
+}
+.modal-card {
+    background: var(--bg-card); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); padding: 24px; width: 100%; max-width: 500px;
+    max-height: 85vh; overflow-y: auto;
+}
+.modal-title {
+    font-family: var(--font-display); font-size: 1.1rem; letter-spacing: 2px;
+    color: var(--gold); margin-bottom: 16px; text-align: center;
+}
+.modal-text { font-size: 0.9rem; color: var(--text-secondary); text-align: center; margin-bottom: 16px; }
+.modal-body { margin-bottom: 16px; }
+
+.draft-result-player { margin-bottom: 14px; }
+.draft-result-name {
+    font-family: var(--font-display); font-weight: 700; font-size: 0.95rem;
+    color: var(--white); margin-bottom: 4px;
+}
+.draft-result-teams { display: flex; flex-direction: column; gap: 2px; padding-left: 8px; }
+.draft-result-team { font-size: 0.8rem; color: var(--text-secondary); }
+.draft-result-team .flag { margin-right: 4px; }
+.draft-result-tier { font-size: 0.6rem; color: var(--text-muted); letter-spacing: 1px; text-transform: uppercase; }
+
 /* Desktop overrides */
 @media (min-width: 769px) {
     .admin-panel { padding: 28px; }
