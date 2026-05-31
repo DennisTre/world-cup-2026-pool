@@ -298,33 +298,28 @@ function renderMatches() {
     }).join('');
 }
 
-// ---- DRAFT LOTTERY STATUS (public) ----
+// ---- DRAFT LOTTERY STATUS (public — always visible) ----
 function renderDraftStatus() {
     const runsEl = document.getElementById('pubDraftRuns');
     const lockedEl = document.getElementById('pubDraftLocked');
     const footerEl = document.getElementById('pubDraftFooter');
-    const sectionEl = document.getElementById('draftStatus');
     if (!runsEl) return;
 
     const runs = draftSettings.totalRuns || 0;
     const locked = draftSettings.draftLocked === true;
 
-    // Hide section if no drafts have been run
-    if (runs === 0 && !locked) {
-        if (sectionEl) sectionEl.style.display = 'none';
-        return;
-    }
-    if (sectionEl) sectionEl.style.display = '';
-
     runsEl.textContent = runs;
     lockedEl.textContent = locked ? 'Yes' : 'No';
-    lockedEl.style.color = locked ? 'var(--green)' : 'var(--gold)';
+    lockedEl.style.color = locked ? 'var(--green)' : 'var(--text-muted)';
 
     if (locked) {
         footerEl.textContent = `Draft Locked After ${runs} Run${runs !== 1 ? 's' : ''}`;
         footerEl.style.color = 'var(--green)';
+    } else if (runs > 0) {
+        footerEl.textContent = 'Draft not yet locked';
+        footerEl.style.color = 'var(--gold)';
     } else {
-        footerEl.textContent = 'Draft is not yet locked';
+        footerEl.textContent = 'Draft has not been run';
         footerEl.style.color = 'var(--text-muted)';
     }
 }
