@@ -53,6 +53,7 @@
                 <button class="admin-tab active" data-tab="matches">Matches</button>
                 <button class="admin-tab" data-tab="countries">Countries</button>
                 <button class="admin-tab" data-tab="players">Players</button>
+                <button class="admin-tab" data-tab="draft">Draft</button>
                 <button class="admin-tab" data-tab="settings">Settings</button>
             </div>
 
@@ -167,6 +168,24 @@
                 </form>
             </div>
 
+            <!-- DRAFT TAB -->
+            <div class="admin-panel" id="tab-draft" style="display:none;">
+                <h3>Tiered Draft Lottery</h3>
+                <div class="draft-status-badge" id="draftRunsBadge"></div>
+                <div class="draft-lock-status" id="draftLockStatus"></div>
+
+                <p class="admin-note">Assigns 4 teams to each of 12 players using a tiered random draft. Each tier is shuffled independently and one team from each tier is assigned per player.</p>
+
+                <div class="draft-actions" id="draftActions">
+                    <button class="btn btn-primary btn-full" id="runDraftBtn">Run Tiered Draft Lottery</button>
+                    <button class="btn btn-outline btn-full" id="clearDraftBtn" style="margin-top:8px;">Clear All Assignments</button>
+                    <button class="btn btn-danger btn-full" id="lockDraftBtn" style="margin-top:8px;">Lock Draft</button>
+                </div>
+
+                <h4>Draft Audit Log</h4>
+                <div id="draftAuditLog"></div>
+            </div>
+
             <!-- SETTINGS TAB -->
             <div class="admin-panel" id="tab-settings" style="display:none;">
                 <h3>Tournament Settings</h3>
@@ -195,6 +214,27 @@
             </div>
         </div>
     </section>
+
+    <!-- DRAFT RESULTS MODAL -->
+    <div class="modal-overlay" id="draftModal" style="display:none;">
+        <div class="modal-card">
+            <h3 class="modal-title" id="draftModalTitle">Draft Results</h3>
+            <div class="modal-body" id="draftModalBody"></div>
+            <button class="btn btn-primary btn-full" onclick="document.getElementById('draftModal').style.display='none'">Close</button>
+        </div>
+    </div>
+
+    <!-- CONFIRM MODAL -->
+    <div class="modal-overlay" id="confirmModal" style="display:none;">
+        <div class="modal-card">
+            <h3 class="modal-title" id="confirmModalTitle">Confirm</h3>
+            <p class="modal-text" id="confirmModalText"></p>
+            <div class="form-actions" style="justify-content:center;">
+                <button class="btn btn-danger" id="confirmModalYes">Yes, Continue</button>
+                <button class="btn btn-outline" onclick="document.getElementById('confirmModal').style.display='none'">Cancel</button>
+            </div>
+        </div>
+    </div>
 
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
