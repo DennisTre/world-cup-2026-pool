@@ -288,6 +288,26 @@ body {
 .draft-public-label { font-size: 0.55rem; color: var(--text-muted); letter-spacing: 1px; margin-top: 4px; }
 .draft-public-footer { font-size: 0.75rem; font-weight: 600; }
 
+/* ---- DRAFT TIERS ---- */
+.tiers-section { background: var(--bg-primary); }
+.tiers-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.tier-card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    padding: 18px; overflow: hidden;
+}
+.tier-header {
+    font-family: var(--font-display); font-size: 0.9rem; font-weight: 700;
+    letter-spacing: 3px; margin-bottom: 14px; padding-bottom: 10px;
+    border-bottom: 2px solid var(--border); color: var(--gold);
+}
+.tier-teams { display: flex; flex-direction: column; gap: 0; }
+.tier-team {
+    display: flex; align-items: center; gap: 8px; font-size: 0.8rem;
+    color: var(--text-secondary); padding: 7px 0;
+    border-bottom: 1px solid var(--border);
+}
+.tier-team:last-child { border-bottom: none; }
+
 /* ---- FOOTER ---- */
 .site-footer { border-top: 1px solid var(--border); padding: 24px 0; text-align: center; color: var(--text-muted); font-size: 0.75rem; }
 
@@ -341,9 +361,15 @@ body {
     .match-team-away { flex-direction: row-reverse; text-align: right; }
 
     .points-grid { grid-template-columns: repeat(2, 1fr); gap: 24px; }
+
+    .tiers-grid { gap: 20px; }
+    .tier-card { padding: 24px; }
 }
 
 /* Small phone tweaks */
+@media (max-width: 479px) {
+    .tiers-grid { grid-template-columns: 1fr; }
+}
 @media (max-width: 374px) {
     .summary-grid { grid-template-columns: repeat(2, 1fr); }
     .summary-card.summary-stage { grid-column: span 2; }
