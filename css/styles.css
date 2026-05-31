@@ -269,6 +269,34 @@ body {
 .points-item .points-label { flex: 1; font-size: 0.85rem; }
 .points-item .points-value { font-family: var(--font-display); font-weight: 700; color: var(--gold); font-size: 0.85rem; }
 
+/* ---- HEAD-TO-HEAD ---- */
+.h2h-section { background: var(--bg-secondary); }
+.h2h-subtitle { font-size: 0.8rem; color: var(--text-muted); margin-top: -12px; margin-bottom: 16px; }
+.h2h-list { display: flex; flex-direction: column; gap: 10px; }
+
+.h2h-card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    padding: 16px; border-left: 3px solid var(--gold);
+}
+.h2h-card.h2h-completed { border-left-color: var(--text-muted); opacity: 0.7; }
+
+.h2h-matchup { display: flex; align-items: center; gap: 8px; }
+
+.h2h-side { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+.h2h-side-away { flex-direction: row-reverse; text-align: right; }
+.h2h-flag { font-size: 1.6rem; flex-shrink: 0; }
+.h2h-team-info { display: flex; flex-direction: column; min-width: 0; }
+.h2h-country { font-family: var(--font-display); font-weight: 600; font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.h2h-owner {
+    font-size: 0.65rem; color: var(--gold); font-weight: 600; letter-spacing: 0.5px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.h2h-center { display: flex; flex-direction: column; align-items: center; min-width: 60px; flex-shrink: 0; }
+.h2h-score-upcoming { font-family: var(--font-display); font-weight: 700; font-size: 1rem; color: var(--text-muted); }
+.h2h-score-final { font-family: var(--font-display); font-weight: 700; font-size: 1rem; color: var(--gold); }
+.h2h-time { font-size: 0.55rem; color: var(--text-muted); letter-spacing: 0.5px; margin-top: 2px; text-align: center; }
+
 /* ---- DRAFT LOTTERY STATUS (public) ---- */
 .draft-status-section { padding: 24px 0; background: var(--bg-secondary); }
 .draft-public-card {
