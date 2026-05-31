@@ -32,6 +32,7 @@ function rebuildLeaderboard() {
     renderPlayerCards();
     renderAlive();
     renderRace();
+    renderH2H();
 }
 
 // ---- REAL-TIME LISTENERS ----
@@ -49,6 +50,7 @@ function initListeners() {
     db.collection('matches').orderBy('datetime', 'asc').onSnapshot(snap => {
         matchesData = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         renderMatches();
+        renderH2H();
     });
 
     db.collection('activity_feed').orderBy('timestamp', 'desc').limit(30).onSnapshot(snap => {
@@ -294,6 +296,86 @@ function renderMatches() {
                 <div class="match-team match-team-away"><span class="flag">${getFlag(m.awayTeam)}</span><span class="match-team-name">${m.awayTeam}</span></div>
             </div>
             <div><div class="match-time">${time}</div><div class="match-round">${m.round || 'Group'}</div></div>
+        </div>`;
+    }).join('');
+}
+
+// ---- HEAD-TO-HEAD MATCHUPS ----
+/** Find upcoming matches where two pool players' countries face each other */
+function renderH2H() {
+    const el = document.getElementById('h2hList');
+    if (!el) return;
+    if (!rankedPlayers.length || !matchesData.length) {
+        el.innerHTML = '<p class="empty-state">No head-to-head matchups yet.</p>';
+        return;
+    }
+
+    // Build a lookup: country name -> player owner name
+    const countryOwner = {};
+    rankedPlayers.forEach(p => {
+        (p.countries || []).forEach(c => { countryOwner[c] = p.ownerName; });
+    });
+
+    const now = new Date();
+    const h2hMatches = [];
+
+    matchesData.forEach(m => {
+        const dt = m.datetime?.toDate ? m.datetime.toDate() : new Date(m.datetime);
+        const homeOwner = countryOwner[m.homeTeam];
+        const awayOwner = countryOwner[m.awayTeam];
+
+        // Only include if both teams are owned AND by different players
+        if (!homeOwner || !awayOwner || homeOwner === awayOwner) return;
+
+        h2hMatches.push({
+            ...m,
+            dt,
+            homeOwner,
+            awayOwner,
+            isCompleted: m.completed === true,
+            isFuture: dt >= now
+        });
+    });
+
+    // Show upcoming first, then recent completed (last 5)
+    const upcoming = h2hMatches.filter(m => !m.isCompleted && m.isFuture);
+    const completed = h2hMatches.filter(m => m.isCompleted).slice(-5).reverse();
+    const display = [...upcoming.slice(0, 10), ...completed];
+
+    if (!display.length) {
+        el.innerHTML = '<p class="empty-state">No head-to-head matchups found.</p>';
+        return;
+    }
+
+    el.innerHTML = display.map(m => {
+        const dateStr = m.dt.toLocaleDateString('en', { month: 'short', day: 'numeric' });
+        const timeStr = m.dt.toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' });
+        const score = m.isCompleted ? `${m.homeScore} - ${m.awayScore}` : 'VS';
+        const scoreClass = m.isCompleted ? 'h2h-score-final' : 'h2h-score-upcoming';
+        const cardClass = m.isCompleted ? 'h2h-completed' : '';
+
+        return `
+        <div class="h2h-card ${cardClass}">
+            <div class="h2h-matchup">
+                <div class="h2h-side">
+                    <span class="h2h-flag">${getFlag(m.homeTeam)}</span>
+                    <div class="h2h-team-info">
+                        <span class="h2h-country">${m.homeTeam}</span>
+                        <span class="h2h-owner">${m.homeOwner}</span>
+                    </div>
+                </div>
+                <div class="h2h-center">
+                    <span class="${scoreClass}">${score}</span>
+                    <span class="h2h-time">${m.isCompleted ? 'FINAL' : dateStr + ' ' + timeStr}</span>
+                </div>
+                <div class="h2h-side h2h-side-away">
+                    <span class="h2h-flag">${getFlag(m.awayTeam)}</span>
+                    <div class="h2h-team-info">
+                        <span class="h2h-country">${m.awayTeam}</span>
+                        <span class="h2h-owner">${m.awayOwner}</span>
+                    </div>
+                </div>
+            </div>
         </div>`;
     }).join('');
 }
