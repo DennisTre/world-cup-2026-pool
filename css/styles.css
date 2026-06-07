@@ -313,6 +313,39 @@ body {
 .h2h-score-final { font-family: var(--font-display); font-weight: 700; font-size: 1rem; color: var(--gold); }
 .h2h-time { font-size: 0.55rem; color: var(--text-muted); letter-spacing: 0.5px; margin-top: 2px; text-align: center; }
 
+/* ---- MESSAGE BOARD ---- */
+.messageboard-section { background: var(--bg-secondary); }
+.mb-post-form { margin-bottom: 16px; }
+.mb-form-row { display: flex; gap: 8px; align-items: center; }
+.mb-input {
+    padding: 12px 14px; background: var(--bg-surface); border: 1px solid var(--border);
+    border-radius: var(--radius); color: var(--text-primary); font-family: var(--font-body);
+    font-size: 16px; min-height: 44px; transition: var(--transition);
+}
+.mb-input:focus { outline: none; border-color: var(--gold-dark); box-shadow: 0 0 0 2px rgba(212,168,67,0.15); }
+.mb-input-error { border-color: var(--red) !important; box-shadow: 0 0 0 2px rgba(239,68,68,0.2) !important; }
+.mb-name-input { width: 120px; flex-shrink: 0; }
+.mb-message-input { flex: 1; min-width: 0; }
+.mb-send-btn { flex-shrink: 0; padding: 12px 20px; }
+
+.mb-feed { display: flex; flex-direction: column; gap: 8px; max-height: 400px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+
+.mb-message {
+    display: flex; gap: 10px; padding: 12px;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+}
+.mb-avatar {
+    width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+    background: var(--gold-dark); color: #1a1a1a;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-display); font-weight: 700; font-size: 0.9rem;
+}
+.mb-body { flex: 1; min-width: 0; }
+.mb-meta { display: flex; align-items: baseline; gap: 8px; margin-bottom: 3px; }
+.mb-author { font-family: var(--font-display); font-weight: 600; font-size: 0.85rem; color: var(--white); }
+.mb-time { font-size: 0.65rem; color: var(--text-muted); }
+.mb-text { font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4; word-wrap: break-word; overflow-wrap: break-word; }
+
 /* ---- DRAFT LOTTERY STATUS (public) ---- */
 .draft-status-section { padding: 24px 0; background: var(--bg-secondary); }
 .draft-public-card {
@@ -406,6 +439,9 @@ body {
 
     .points-grid { grid-template-columns: repeat(2, 1fr); gap: 24px; }
 
+    .mb-name-input { width: 160px; }
+    .mb-feed { max-height: 500px; }
+
     .tiers-grid { gap: 20px; }
     .tier-card { padding: 24px; }
 }
@@ -413,6 +449,10 @@ body {
 /* Small phone tweaks */
 @media (max-width: 479px) {
     .tiers-grid { grid-template-columns: 1fr; }
+    .mb-form-row { flex-wrap: wrap; }
+    .mb-name-input { width: 100%; }
+    .mb-message-input { flex: 1; }
+    .mb-send-btn { width: 100%; }
 }
 @media (max-width: 374px) {
     .summary-grid { grid-template-columns: repeat(2, 1fr); }
