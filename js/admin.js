@@ -69,7 +69,7 @@ function renderAdminPoolSelector() {
     if (!el) return;
     el.innerHTML = adminPoolsList.map(function(p) {
         return '<button class="pool-tab ' + (p.id === currentAdminPoolId ? 'active' : '') + '" data-pool="' + p.id + '">' + (p.name || p.id) + '</button>';
-    }).join('') + ' <button class="btn btn-sm btn-outline" id="createPoolBtn" style="margin-left:8px;">+ New Pool</button>';
+    }).join('') + ' <button class="btn btn-sm btn-outline" id="createPoolBtn" style="margin-left:8px;">+ New Cup</button>';
 
     el.querySelectorAll('.pool-tab').forEach(function(btn) {
         btn.addEventListener('click', function() { switchAdminPool(btn.dataset.pool); });
@@ -93,7 +93,7 @@ function switchAdminPool(poolId) {
 
 // ---- CREATE NEW POOL ----
 async function createNewPool() {
-    var name = prompt('Enter pool name (e.g., Pool B):');
+    var name = prompt('Enter cup name (e.g., Cup B):');
     if (!name || !name.trim()) return;
     try {
         var docRef = await db.collection('pools').add({
@@ -572,7 +572,7 @@ document.getElementById('lockDraftBtn').addEventListener('click', async function
 
 document.getElementById('migrateBtn').addEventListener('click', async function() {
     var confirmed = await showConfirmModal('Migrate to Multi-Pool',
-        'This will copy all existing players and draft data into "Pool A". Existing data stays intact. Only run this once. Continue?');
+        'This will copy all existing players and draft data into "Cup A". Existing data stays intact. Only run this once. Continue?');
     if (!confirmed) return;
 
     try {
@@ -582,7 +582,7 @@ document.getElementById('migrateBtn').addEventListener('click', async function()
         var poolARef = db.collection('pools').doc('pool-a');
         var poolADoc = await poolARef.get();
         if (!poolADoc.exists) {
-            await poolARef.set({ name: 'Pool A', createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+            await poolARef.set({ name: 'Cup A', createdAt: firebase.firestore.FieldValue.serverTimestamp() });
         }
 
         // 2. Copy players from top-level to pools/pool-a/players
@@ -593,7 +593,7 @@ document.getElementById('migrateBtn').addEventListener('click', async function()
                 batch.set(poolPlayersRef(db, 'pool-a').doc(doc.id), doc.data());
             });
             await batch.commit();
-            showToast('Migrated ' + playersSnap.size + ' players to Pool A');
+            showToast('Migrated ' + playersSnap.size + ' players to Cup A');
         }
 
         // 3. Copy draft_log from top-level to pools/pool-a/draft_log
@@ -612,7 +612,10 @@ document.getElementById('migrateBtn').addEventListener('click', async function()
             await poolDraftSettingsRef(db, 'pool-a').set(draftSettingsDoc.data());
         }
 
-        showToast('Migration complete! Pool A is ready.');
+        // Ensure the name is Cup A (in case it was created as Pool A previously)
+        await poolARef.update({ name: 'Cup A' });
+
+        showToast('Migration complete! Cup A is ready.');
     } catch (err) {
         showToast('Error: ' + err.message, true);
     }
