@@ -1,8 +1,7 @@
 // ============================================
-// WORLD CUP 2026 POOL - PUBLIC APP
-// Player points auto-calculated from country poolPoints.
-// Scoring logic in scoring.js (shared with admin.js).
-// Removed: Biggest Match, Bracket, Spotlight, Tracker, Stats
+// WORLD CUP 2026 POOL - PUBLIC APP (Multi-Pool)
+// Shared: countries, matches, activity_feed, site_settings
+// Per-pool: players, draft_log, draft settings
 // ============================================
 
 let playersData = [];
@@ -12,18 +11,47 @@ let matchesData = [];
 let activityData = [];
 let siteSettings = {};
 let draftSettings = {};
+let currentPoolId = null;
+let poolsList = [];
+let poolUnsubscribers = []; // track per-pool listener unsubscribe functions
 
 // ---- NAV TOGGLE ----
 document.querySelector('.nav-toggle').addEventListener('click', () => {
     document.querySelector('.nav-links').classList.toggle('open');
 });
 document.querySelectorAll('.nav-links a').forEach(link => {
-    link.addEventListener('click', () => {
-        document.querySelector('.nav-links').classList.remove('open');
-    });
+    link.addEventListener('click', () => document.querySelector('.nav-links').classList.remove('open'));
 });
 
-// ---- REBUILD (called whenever players OR countries change) ----
+// ---- POOL SELECTOR ----
+function renderPoolSelector() {
+    const el = document.getElementById('poolSelector');
+    if (!el || !poolsList.length) return;
+    el.innerHTML = poolsList.map(p =>
+        `<button class="pool-tab ${p.id === currentPoolId ? 'active' : ''}" data-pool="${p.id}">${p.name || p.id}</button>`
+    ).join('');
+    el.querySelectorAll('.pool-tab').forEach(btn => {
+        btn.addEventListener('click', () => switchPool(btn.dataset.pool));
+    });
+}
+
+function switchPool(poolId) {
+    if (poolId === currentPoolId) return;
+    currentPoolId = poolId;
+    // Save preference
+    try { localStorage.setItem('selectedPool', poolId); } catch(e) {}
+    // Detach old pool listeners
+    poolUnsubscribers.forEach(fn => fn());
+    poolUnsubscribers = [];
+    // Reset pool-specific data
+    playersData = [];
+    draftSettings = {};
+    // Attach new pool listeners
+    attachPoolListeners(poolId);
+    renderPoolSelector();
+}
+
+// ---- REBUILD ----
 function rebuildLeaderboard() {
     rankedPlayers = buildRankedLeaderboard(playersData, countriesData);
     renderHero();
@@ -35,13 +63,8 @@ function rebuildLeaderboard() {
     renderH2H();
 }
 
-// ---- REAL-TIME LISTENERS ----
-function initListeners() {
-    db.collection('players').onSnapshot(snap => {
-        playersData = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        rebuildLeaderboard();
-    });
-
+// ---- SHARED LISTENERS (run once) ----
+function initSharedListeners() {
     db.collection('countries').onSnapshot(snap => {
         countriesData = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         rebuildLeaderboard();
@@ -64,11 +87,39 @@ function initListeners() {
         renderSummary();
     });
 
-    // Draft settings listener (public transparency)
-    db.collection('site_settings').doc('draft').onSnapshot(doc => {
+    // Pool registry listener
+    db.collection('pools').orderBy('name', 'asc').onSnapshot(snap => {
+        poolsList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        if (!poolsList.length) return;
+
+        // Auto-select pool: saved preference, URL param, or first
+        let savedPool = null;
+        try { savedPool = localStorage.getItem('selectedPool'); } catch(e) {}
+        const urlPool = new URLSearchParams(window.location.search).get('pool');
+        const targetPool = urlPool || savedPool || poolsList[0].id;
+        const validPool = poolsList.find(p => p.id === targetPool) ? targetPool : poolsList[0].id;
+
+        if (validPool !== currentPoolId) {
+            switchPool(validPool);
+        } else {
+            renderPoolSelector();
+        }
+    });
+}
+
+// ---- PER-POOL LISTENERS ----
+function attachPoolListeners(poolId) {
+    const playersUnsub = poolPlayersRef(db, poolId).onSnapshot(snap => {
+        playersData = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        rebuildLeaderboard();
+    });
+    poolUnsubscribers.push(playersUnsub);
+
+    const draftUnsub = poolDraftSettingsRef(db, poolId).onSnapshot(doc => {
         draftSettings = doc.exists ? doc.data() : {};
         renderDraftStatus();
     });
+    poolUnsubscribers.push(draftUnsub);
 }
 
 // ---- HERO ----
@@ -79,10 +130,10 @@ function renderHero() {
     document.getElementById('heroOwner').textContent = leader.ownerName || '—';
     document.getElementById('heroPoints').textContent = leader.calculatedPoints || 0;
     document.getElementById('heroFlags').innerHTML = (leader.countries || [])
-        .map(c => `<span class="flag" title="${c}">${getFlag(c)}</span>`).join('');
+        .map(c => '<span class="flag" title="' + c + '">' + getFlag(c) + '</span>').join('');
 }
 
-// ---- SUMMARY DASHBOARD ----
+// ---- SUMMARY ----
 function renderSummary() {
     document.getElementById('sumPlayers').textContent = rankedPlayers.length;
     document.getElementById('sumAlive').textContent = countriesData.filter(c => !c.eliminated).length;
@@ -101,55 +152,39 @@ function renderLastUpdated() {
     });
 }
 
-// ---- LEADERBOARD (dual: mobile cards + desktop table) ----
+// ---- LEADERBOARD ----
 function renderLeaderboard() {
     const tbody = document.getElementById('leaderboardBody');
     const cards = document.getElementById('leaderboardCards');
     if (!tbody || !cards) return;
 
-    // Mobile cards
     cards.innerHTML = rankedPlayers.map(p => {
         const movement = getRankMovement(p.previousRank, p.rank);
         const flagsHtml = (p.countries || []).map(c => {
             const elim = isEliminated(c);
-            return `<span class="flag" style="${elim ? 'opacity:0.3' : ''}" title="${c}">${getFlag(c)}</span>`;
+            return '<span class="flag" style="' + (elim ? 'opacity:0.3' : '') + '" title="' + c + '">' + getFlag(c) + '</span>';
         }).join('');
-        const rankClass = p.rank <= 3 ? `lb-card-rank-${p.rank}` : '';
-
-        return `
-        <div class="lb-card ${rankClass}">
-            <div class="lb-card-left">
-                <span class="lb-card-pos">${p.rank}</span>
-                <span class="lb-card-move">${movement}</span>
-            </div>
-            <div class="lb-card-center">
-                <div class="lb-card-team">${p.teamName || '—'}</div>
-                <div class="lb-card-owner">${p.ownerName || '—'}</div>
-                <div class="lb-card-flags">${flagsHtml}</div>
-            </div>
-            <div class="lb-card-pts">${p.calculatedPoints}</div>
-        </div>`;
+        const rankClass = p.rank <= 3 ? 'lb-card-rank-' + p.rank : '';
+        return '<div class="lb-card ' + rankClass + '">' +
+            '<div class="lb-card-left"><span class="lb-card-pos">' + p.rank + '</span><span class="lb-card-move">' + movement + '</span></div>' +
+            '<div class="lb-card-center"><div class="lb-card-team">' + (p.teamName || '—') + '</div><div class="lb-card-owner">' + (p.ownerName || '—') + '</div><div class="lb-card-flags">' + flagsHtml + '</div></div>' +
+            '<div class="lb-card-pts">' + p.calculatedPoints + '</div></div>';
     }).join('');
 
-    // Desktop table
     tbody.innerHTML = rankedPlayers.map(p => {
         const rank = p.rank;
-        const rankClass = rank <= 3 ? `rank-${rank}` : '';
+        const rankClass = rank <= 3 ? 'rank-' + rank : '';
         const movement = getRankMovement(p.previousRank, rank);
         const flags = (p.countries || []).map(c => {
             const elim = isEliminated(c);
-            return `<span class="flag" title="${c}" style="${elim ? 'opacity:0.3' : ''}">${getFlag(c)}</span>`;
+            return '<span class="flag" title="' + c + '" style="' + (elim ? 'opacity:0.3' : '') + '">' + getFlag(c) + '</span>';
         }).join('');
-
-        return `
-        <tr class="${rankClass}">
-            <td class="col-rank"><span class="rank-badge">${rank}</span></td>
-            <td class="col-movement">${movement}</td>
-            <td class="col-team"><div class="team-name">${p.teamName || '—'}</div></td>
-            <td class="col-owner"><span class="owner-name">${p.ownerName || '—'}</span></td>
-            <td class="col-countries"><div class="country-flags">${flags}</div></td>
-            <td class="col-points"><span class="points-display">${p.calculatedPoints}</span></td>
-        </tr>`;
+        return '<tr class="' + rankClass + '"><td class="col-rank"><span class="rank-badge">' + rank + '</span></td>' +
+            '<td class="col-movement">' + movement + '</td>' +
+            '<td class="col-team"><div class="team-name">' + (p.teamName || '—') + '</div></td>' +
+            '<td class="col-owner"><span class="owner-name">' + (p.ownerName || '—') + '</span></td>' +
+            '<td class="col-countries"><div class="country-flags">' + flags + '</div></td>' +
+            '<td class="col-points"><span class="points-display">' + p.calculatedPoints + '</span></td></tr>';
     }).join('');
 }
 
@@ -166,18 +201,14 @@ function renderPlayerCards() {
         const topClass = p.rank === 1 ? 'top-1' : '';
         const countries = (p.countries || []).map(c => {
             const elim = isEliminated(c);
-            return `<span class="card-country-tag ${elim ? 'eliminated' : ''}"><span class="flag">${getFlag(c)}</span> ${c}</span>`;
+            return '<span class="card-country-tag ' + (elim ? 'eliminated' : '') + '"><span class="flag">' + getFlag(c) + '</span> ' + c + '</span>';
         }).join('');
-
-        return `
-        <div class="player-card ${topClass}">
-            <span class="card-rank">#${p.rank}</span>
-            <div class="card-team-name">${p.teamName || '—'}</div>
-            <div class="card-owner">${p.ownerName || '—'}</div>
-            <div class="card-points">${p.calculatedPoints}</div>
-            <span class="card-points-label">POINTS</span>
-            <div class="card-countries">${countries}</div>
-        </div>`;
+        return '<div class="player-card ' + topClass + '"><span class="card-rank">#' + p.rank + '</span>' +
+            '<div class="card-team-name">' + (p.teamName || '—') + '</div>' +
+            '<div class="card-owner">' + (p.ownerName || '—') + '</div>' +
+            '<div class="card-points">' + p.calculatedPoints + '</div>' +
+            '<span class="card-points-label">POINTS</span>' +
+            '<div class="card-countries">' + countries + '</div></div>';
     }).join('');
 }
 
@@ -188,48 +219,35 @@ function renderAlive() {
     const list = rankedPlayers.map(p => {
         const alive = (p.countries || []).filter(c => !isEliminated(c)).length;
         const total = (p.countries || []).length;
-        return { ...p, alive, total };
+        return { ownerName: p.ownerName, alive: alive, total: total };
     }).sort((a, b) => b.alive - a.alive);
-
-    grid.innerHTML = list.map(p => `
-    <div class="alive-card">
-        <div class="alive-info">
-            <span class="alive-owner">${p.ownerName}</span>
-            <span class="alive-count-text">${p.alive} of ${p.total} Countries Alive</span>
-        </div>
-        <div class="alive-count">${p.alive}</div>
-    </div>`).join('');
+    grid.innerHTML = list.map(p =>
+        '<div class="alive-card"><div class="alive-info"><span class="alive-owner">' + p.ownerName + '</span>' +
+        '<span class="alive-count-text">' + p.alive + ' of ' + p.total + ' Countries Alive</span></div>' +
+        '<div class="alive-count">' + p.alive + '</div></div>'
+    ).join('');
 }
 
-// ---- RACE FOR THE CUP ----
+// ---- RACE ----
 function renderRace() {
     const container = document.getElementById('raceBars');
     if (!container) return;
     const top5 = rankedPlayers.slice(0, 5);
-    const maxPts = Math.max(...top5.map(p => p.calculatedPoints || 0), 1);
-
+    const maxPts = Math.max.apply(null, top5.map(p => p.calculatedPoints || 0).concat([1]));
     const probRaw = top5.map(p => {
         const pts = p.calculatedPoints || 0;
         const alive = (p.countries || []).filter(c => !isEliminated(c)).length;
         return pts * 1.5 + alive * 3;
     });
     const totalProb = probRaw.reduce((a, b) => a + b, 0) || 1;
-
     container.innerHTML = top5.map((p, i) => {
         const pts = p.calculatedPoints || 0;
         const pct = Math.round((probRaw[i] / totalProb) * 100);
         const w = Math.max((pts / maxPts) * 100, 15);
-        return `
-        <div class="race-bar-item">
-            <span class="race-rank">${i + 1}</span>
-            <span class="race-name">${p.teamName || p.ownerName}</span>
-            <div class="race-bar-track">
-                <div class="race-bar-fill" style="width:${w}%">
-                    <span class="race-bar-pts">${pts}</span>
-                </div>
-            </div>
-            <span class="race-pct">${pct}%</span>
-        </div>`;
+        return '<div class="race-bar-item"><span class="race-rank">' + (i+1) + '</span>' +
+            '<span class="race-name">' + (p.teamName || p.ownerName) + '</span>' +
+            '<div class="race-bar-track"><div class="race-bar-fill" style="width:' + w + '%"><span class="race-bar-pts">' + pts + '</span></div></div>' +
+            '<span class="race-pct">' + pct + '%</span></div>';
     }).join('');
 }
 
@@ -237,19 +255,13 @@ function renderRace() {
 function renderActivity() {
     const feed = document.getElementById('activityFeed');
     if (!feed) return;
-    if (!activityData.length) {
-        feed.innerHTML = '<p class="empty-state">No recent activity yet.</p>';
-        return;
-    }
+    if (!activityData.length) { feed.innerHTML = '<p class="empty-state">No recent activity yet.</p>'; return; }
     feed.innerHTML = activityData.map(a => {
         const time = a.timestamp ? formatTime(a.timestamp) : '';
-        return `
-        <div class="activity-item">
-            <span class="activity-flag">${getFlag(a.country)}</span>
-            <span class="activity-text"><strong>${a.country}</strong> — ${a.description || ''}</span>
-            <span class="activity-points">+${a.points || 0}</span>
-            <span class="activity-time">${time}</span>
-        </div>`;
+        return '<div class="activity-item"><span class="activity-flag">' + getFlag(a.country) + '</span>' +
+            '<span class="activity-text"><strong>' + a.country + '</strong> — ' + (a.description || '') + '</span>' +
+            '<span class="activity-points">+' + (a.points || 0) + '</span>' +
+            '<span class="activity-time">' + time + '</span></div>';
     }).join('');
 }
 
@@ -259,152 +271,86 @@ function formatTime(ts) {
     const diff = Date.now() - d.getTime();
     const mins = Math.floor(diff / 60000);
     if (mins < 1) return 'Now';
-    if (mins < 60) return `${mins}m`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h`;
-    return `${Math.floor(hrs / 24)}d`;
+    if (mins < 60) return mins + 'm';
+    var hrs = Math.floor(mins / 60);
+    if (hrs < 24) return hrs + 'h';
+    return Math.floor(hrs / 24) + 'd';
 }
 
 // ---- UPCOMING MATCHES ----
 function renderMatches() {
-    const list = document.getElementById('matchesList');
+    var list = document.getElementById('matchesList');
     if (!list) return;
-    const now = new Date();
-    const upcoming = matchesData.filter(m => {
+    var now = new Date();
+    var upcoming = matchesData.filter(function(m) {
         if (m.completed) return false;
-        const dt = m.datetime?.toDate ? m.datetime.toDate() : new Date(m.datetime);
+        var dt = m.datetime && m.datetime.toDate ? m.datetime.toDate() : new Date(m.datetime);
         return dt >= now;
     }).slice(0, 10);
-
-    if (!upcoming.length) {
-        list.innerHTML = '<p class="empty-state">No upcoming matches scheduled.</p>';
-        return;
-    }
-
-    list.innerHTML = upcoming.map(m => {
-        const dt = m.datetime?.toDate ? m.datetime.toDate() : new Date(m.datetime);
-        const day = dt.getDate();
-        const mon = dt.toLocaleString('en', { month: 'short' }).toUpperCase();
-        const time = dt.toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' });
-        return `
-        <div class="match-card">
-            <div class="match-date"><div class="match-date-day">${day}</div><div class="match-date-month">${mon}</div></div>
-            <div class="match-divider"></div>
-            <div class="match-teams">
-                <div class="match-team"><span class="flag">${getFlag(m.homeTeam)}</span><span class="match-team-name">${m.homeTeam}</span></div>
-                <span class="match-vs">VS</span>
-                <div class="match-team match-team-away"><span class="flag">${getFlag(m.awayTeam)}</span><span class="match-team-name">${m.awayTeam}</span></div>
-            </div>
-            <div><div class="match-time">${time}</div><div class="match-round">${m.round || 'Group'}</div></div>
-        </div>`;
+    if (!upcoming.length) { list.innerHTML = '<p class="empty-state">No upcoming matches scheduled.</p>'; return; }
+    list.innerHTML = upcoming.map(function(m) {
+        var dt = m.datetime && m.datetime.toDate ? m.datetime.toDate() : new Date(m.datetime);
+        var day = dt.getDate();
+        var mon = dt.toLocaleString('en', { month: 'short' }).toUpperCase();
+        var time = dt.toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' });
+        return '<div class="match-card">' +
+            '<div class="match-date"><div class="match-date-day">' + day + '</div><div class="match-date-month">' + mon + '</div></div>' +
+            '<div class="match-divider"></div>' +
+            '<div class="match-teams"><div class="match-team"><span class="flag">' + getFlag(m.homeTeam) + '</span><span class="match-team-name">' + m.homeTeam + '</span></div>' +
+            '<span class="match-vs">VS</span>' +
+            '<div class="match-team match-team-away"><span class="flag">' + getFlag(m.awayTeam) + '</span><span class="match-team-name">' + m.awayTeam + '</span></div></div>' +
+            '<div><div class="match-time">' + time + '</div><div class="match-round">' + (m.round || 'Group') + '</div></div></div>';
     }).join('');
 }
 
-// ---- HEAD-TO-HEAD MATCHUPS ----
-/** Find upcoming matches where two pool players' countries face each other */
+// ---- H2H ----
 function renderH2H() {
-    const el = document.getElementById('h2hList');
+    var el = document.getElementById('h2hList');
     if (!el) return;
-    if (!rankedPlayers.length || !matchesData.length) {
-        el.innerHTML = '<p class="empty-state">No head-to-head matchups yet.</p>';
-        return;
-    }
-
-    // Build a lookup: country name -> player owner name
-    const countryOwner = {};
-    rankedPlayers.forEach(p => {
-        (p.countries || []).forEach(c => { countryOwner[c] = p.ownerName; });
+    if (!rankedPlayers.length || !matchesData.length) { el.innerHTML = '<p class="empty-state">No head-to-head matchups yet.</p>'; return; }
+    var countryOwner = {};
+    rankedPlayers.forEach(function(p) { (p.countries || []).forEach(function(c) { countryOwner[c] = p.ownerName; }); });
+    var now = new Date();
+    var h2hMatches = [];
+    matchesData.forEach(function(m) {
+        var dt = m.datetime && m.datetime.toDate ? m.datetime.toDate() : new Date(m.datetime);
+        var ho = countryOwner[m.homeTeam], ao = countryOwner[m.awayTeam];
+        if (!ho || !ao || ho === ao) return;
+        h2hMatches.push({ homeTeam: m.homeTeam, awayTeam: m.awayTeam, homeScore: m.homeScore, awayScore: m.awayScore, dt: dt, homeOwner: ho, awayOwner: ao, isCompleted: m.completed === true, isFuture: dt >= now });
     });
-
-    const now = new Date();
-    const h2hMatches = [];
-
-    matchesData.forEach(m => {
-        const dt = m.datetime?.toDate ? m.datetime.toDate() : new Date(m.datetime);
-        const homeOwner = countryOwner[m.homeTeam];
-        const awayOwner = countryOwner[m.awayTeam];
-
-        // Only include if both teams are owned AND by different players
-        if (!homeOwner || !awayOwner || homeOwner === awayOwner) return;
-
-        h2hMatches.push({
-            ...m,
-            dt,
-            homeOwner,
-            awayOwner,
-            isCompleted: m.completed === true,
-            isFuture: dt >= now
-        });
-    });
-
-    // Show upcoming first, then recent completed (last 5)
-    const upcoming = h2hMatches.filter(m => !m.isCompleted && m.isFuture);
-    const completed = h2hMatches.filter(m => m.isCompleted).slice(-5).reverse();
-    const display = [...upcoming.slice(0, 10), ...completed];
-
-    if (!display.length) {
-        el.innerHTML = '<p class="empty-state">No head-to-head matchups found.</p>';
-        return;
-    }
-
-    el.innerHTML = display.map(m => {
-        const dateStr = m.dt.toLocaleDateString('en', { month: 'short', day: 'numeric' });
-        const timeStr = m.dt.toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' });
-        const score = m.isCompleted ? `${m.homeScore} - ${m.awayScore}` : 'VS';
-        const scoreClass = m.isCompleted ? 'h2h-score-final' : 'h2h-score-upcoming';
-        const cardClass = m.isCompleted ? 'h2h-completed' : '';
-
-        return `
-        <div class="h2h-card ${cardClass}">
-            <div class="h2h-matchup">
-                <div class="h2h-side">
-                    <span class="h2h-flag">${getFlag(m.homeTeam)}</span>
-                    <div class="h2h-team-info">
-                        <span class="h2h-country">${m.homeTeam}</span>
-                        <span class="h2h-owner">${m.homeOwner}</span>
-                    </div>
-                </div>
-                <div class="h2h-center">
-                    <span class="${scoreClass}">${score}</span>
-                    <span class="h2h-time">${m.isCompleted ? 'FINAL' : dateStr + ' ' + timeStr}</span>
-                </div>
-                <div class="h2h-side h2h-side-away">
-                    <span class="h2h-flag">${getFlag(m.awayTeam)}</span>
-                    <div class="h2h-team-info">
-                        <span class="h2h-country">${m.awayTeam}</span>
-                        <span class="h2h-owner">${m.awayOwner}</span>
-                    </div>
-                </div>
-            </div>
-        </div>`;
+    var upcoming = h2hMatches.filter(function(m) { return !m.isCompleted && m.isFuture; });
+    var completed = h2hMatches.filter(function(m) { return m.isCompleted; }).slice(-5).reverse();
+    var display = upcoming.slice(0, 10).concat(completed);
+    if (!display.length) { el.innerHTML = '<p class="empty-state">No head-to-head matchups found.</p>'; return; }
+    el.innerHTML = display.map(function(m) {
+        var dateStr = m.dt.toLocaleDateString('en', { month: 'short', day: 'numeric' });
+        var timeStr = m.dt.toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' });
+        var score = m.isCompleted ? m.homeScore + ' - ' + m.awayScore : 'VS';
+        var scoreClass = m.isCompleted ? 'h2h-score-final' : 'h2h-score-upcoming';
+        var cardClass = m.isCompleted ? 'h2h-completed' : '';
+        return '<div class="h2h-card ' + cardClass + '"><div class="h2h-matchup">' +
+            '<div class="h2h-side"><span class="h2h-flag">' + getFlag(m.homeTeam) + '</span><div class="h2h-team-info"><span class="h2h-country">' + m.homeTeam + '</span><span class="h2h-owner">' + m.homeOwner + '</span></div></div>' +
+            '<div class="h2h-center"><span class="' + scoreClass + '">' + score + '</span><span class="h2h-time">' + (m.isCompleted ? 'FINAL' : dateStr + ' ' + timeStr) + '</span></div>' +
+            '<div class="h2h-side h2h-side-away"><span class="h2h-flag">' + getFlag(m.awayTeam) + '</span><div class="h2h-team-info"><span class="h2h-country">' + m.awayTeam + '</span><span class="h2h-owner">' + m.awayOwner + '</span></div></div>' +
+            '</div></div>';
     }).join('');
 }
 
-// ---- DRAFT LOTTERY STATUS (public — always visible) ----
+// ---- DRAFT STATUS (public) ----
 function renderDraftStatus() {
-    const runsEl = document.getElementById('pubDraftRuns');
-    const lockedEl = document.getElementById('pubDraftLocked');
-    const footerEl = document.getElementById('pubDraftFooter');
+    var runsEl = document.getElementById('pubDraftRuns');
+    var lockedEl = document.getElementById('pubDraftLocked');
+    var footerEl = document.getElementById('pubDraftFooter');
     if (!runsEl) return;
-
-    const runs = draftSettings.totalRuns || 0;
-    const locked = draftSettings.draftLocked === true;
-
+    var runs = draftSettings.totalRuns || 0;
+    var locked = draftSettings.draftLocked === true;
     runsEl.textContent = runs;
     lockedEl.textContent = locked ? 'Yes' : 'No';
     lockedEl.style.color = locked ? 'var(--green)' : 'var(--text-muted)';
-
-    if (locked) {
-        footerEl.textContent = `Draft Locked After ${runs} Run${runs !== 1 ? 's' : ''}`;
-        footerEl.style.color = 'var(--green)';
-    } else if (runs > 0) {
-        footerEl.textContent = 'Draft not yet locked';
-        footerEl.style.color = 'var(--gold)';
-    } else {
-        footerEl.textContent = 'Draft has not been run';
-        footerEl.style.color = 'var(--text-muted)';
-    }
+    if (locked) { footerEl.textContent = 'Draft Locked After ' + runs + ' Run' + (runs !== 1 ? 's' : ''); footerEl.style.color = 'var(--green)'; }
+    else if (runs > 0) { footerEl.textContent = 'Draft not yet locked'; footerEl.style.color = 'var(--gold)'; }
+    else { footerEl.textContent = 'Draft has not been run'; footerEl.style.color = 'var(--text-muted)'; }
 }
 
 // ---- INIT ----
-initListeners();
+initSharedListeners();
