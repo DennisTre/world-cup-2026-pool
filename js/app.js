@@ -9,6 +9,7 @@ let rankedPlayers = [];
 let countriesData = [];
 let matchesData = [];
 let activityData = [];
+let messagesData = [];
 let siteSettings = {};
 let draftSettings = {};
 let currentPoolId = null;
@@ -46,6 +47,7 @@ function switchPool(poolId) {
     // Reset pool-specific data
     playersData = [];
     draftSettings = {};
+    messagesData = [];
     // Attach new pool listeners
     attachPoolListeners(poolId);
     renderPoolSelector();
@@ -120,6 +122,12 @@ function attachPoolListeners(poolId) {
         renderDraftStatus();
     });
     poolUnsubscribers.push(draftUnsub);
+
+    const msgUnsub = poolMessagesRef(db, poolId).orderBy('timestamp', 'desc').limit(50).onSnapshot(snap => {
+        messagesData = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        renderMessages();
+    });
+    poolUnsubscribers.push(msgUnsub);
 }
 
 // ---- HERO ----
@@ -350,6 +358,74 @@ function renderDraftStatus() {
     if (locked) { footerEl.textContent = 'Draft Locked After ' + runs + ' Run' + (runs !== 1 ? 's' : ''); footerEl.style.color = 'var(--green)'; }
     else if (runs > 0) { footerEl.textContent = 'Draft not yet locked'; footerEl.style.color = 'var(--gold)'; }
     else { footerEl.textContent = 'Draft has not been run'; footerEl.style.color = 'var(--text-muted)'; }
+}
+
+// ---- MESSAGE BOARD ----
+(function() {
+    // Restore saved name
+    var savedName = '';
+    try { savedName = localStorage.getItem('mbUserName') || ''; } catch(e) {}
+    var nameInput = document.getElementById('mbName');
+    if (nameInput && savedName) nameInput.value = savedName;
+
+    var sendBtn = document.getElementById('mbSendBtn');
+    if (sendBtn) {
+        sendBtn.addEventListener('click', postMessage);
+    }
+    var msgInput = document.getElementById('mbMessage');
+    if (msgInput) {
+        msgInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') postMessage();
+        });
+    }
+})();
+
+async function postMessage() {
+    if (!currentPoolId) return;
+    var nameInput = document.getElementById('mbName');
+    var msgInput = document.getElementById('mbMessage');
+    var name = (nameInput.value || '').trim();
+    var msg = (msgInput.value || '').trim();
+    if (!name) { nameInput.focus(); nameInput.classList.add('mb-input-error'); setTimeout(function() { nameInput.classList.remove('mb-input-error'); }, 1500); return; }
+    if (!msg) { msgInput.focus(); return; }
+    try {
+        localStorage.setItem('mbUserName', name);
+    } catch(e) {}
+    var sendBtn = document.getElementById('mbSendBtn');
+    sendBtn.disabled = true;
+    try {
+        await poolMessagesRef(db, currentPoolId).add({
+            name: name,
+            message: msg,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        msgInput.value = '';
+    } catch(err) {
+        console.error('Post failed:', err);
+    }
+    sendBtn.disabled = false;
+}
+
+function renderMessages() {
+    var feed = document.getElementById('mbFeed');
+    if (!feed) return;
+    if (!messagesData.length) { feed.innerHTML = '<p class="empty-state">No messages yet. Be the first to post!</p>'; return; }
+    feed.innerHTML = messagesData.map(function(m) {
+        var time = m.timestamp ? formatTime(m.timestamp) : '';
+        var initial = (m.name || '?').charAt(0).toUpperCase();
+        return '<div class="mb-message">' +
+            '<div class="mb-avatar">' + initial + '</div>' +
+            '<div class="mb-body">' +
+            '<div class="mb-meta"><span class="mb-author">' + escapeHtml(m.name) + '</span><span class="mb-time">' + time + '</span></div>' +
+            '<div class="mb-text">' + escapeHtml(m.message) + '</div>' +
+            '</div></div>';
+    }).join('');
+}
+
+function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
 }
 
 // ---- INIT ----
