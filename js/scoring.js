@@ -2,13 +2,11 @@
 // SCORING UTILITIES
 // Single source of truth for all scoring logic.
 // Shared between app.js (public) and admin.js (admin).
+// Multi-pool aware: functions accept pool path prefix.
 // ============================================
 
 /**
  * Calculate a player's total points by summing poolPoints from assigned countries.
- * @param {Object} player - Player object with countries array
- * @param {Array} countries - Array of country objects with name and poolPoints
- * @returns {number} Total calculated points
  */
 function calculatePlayerPoints(player, countries) {
     if (!player.countries || !player.countries.length || !countries.length) return 0;
@@ -20,10 +18,6 @@ function calculatePlayerPoints(player, countries) {
 
 /**
  * Build a ranked leaderboard from raw player and country data.
- * Returns players sorted by calculated points (desc), each with rank.
- * @param {Array} players - Raw player objects
- * @param {Array} countries - Country objects
- * @returns {Array} Sorted players with calculatedPoints and rank
  */
 function buildRankedLeaderboard(players, countries) {
     const list = players.map(p => ({
@@ -37,9 +31,6 @@ function buildRankedLeaderboard(players, countries) {
 
 /**
  * Get rank movement indicator HTML.
- * @param {number|null} previousRank
- * @param {number} currentRank
- * @returns {string} HTML string
  */
 function getRankMovement(previousRank, currentRank) {
     if (previousRank == null) return '<span class="movement-new">NEW</span>';
@@ -51,22 +42,18 @@ function getRankMovement(previousRank, currentRank) {
 
 /**
  * Validate country data before saving.
- * @param {Object} data
- * @returns {{ valid: boolean, errors: string[] }}
  */
 function validateCountry(data) {
     const errors = [];
     if (!data.name || !data.name.trim()) errors.push('Country name is required');
     ['wins','draws','losses','goalsFor','goalsAgainst','poolPoints'].forEach(f => {
-        if ((data[f] || 0) < 0) errors.push(`${f} cannot be negative`);
+        if ((data[f] || 0) < 0) errors.push(f + ' cannot be negative');
     });
     return { valid: errors.length === 0, errors };
 }
 
 /**
  * Validate player data before saving.
- * @param {Object} data
- * @returns {{ valid: boolean, errors: string[] }}
  */
 function validatePlayer(data) {
     const errors = [];
@@ -78,7 +65,6 @@ function validatePlayer(data) {
 
 /**
  * Update the lastUpdated timestamp in site_settings/metadata.
- * @param {Object} dbRef - Firestore db reference
  */
 function updateLastUpdated(dbRef) {
     dbRef.collection('site_settings').doc('metadata').set({
@@ -87,15 +73,36 @@ function updateLastUpdated(dbRef) {
 }
 
 /**
- * Snapshot current ranks as previousRank, then recalculate points.
- * Call BEFORE writing new country data so movement tracks correctly.
- * Uses Firestore batch writes.
- * @param {Object} dbRef - Firestore db reference
+ * Get the Firestore collection reference for a pool's players.
+ * @param {Object} dbRef - Firestore db
+ * @param {string} poolId - Pool document ID
  */
-async function snapshotRanksAndRecalculate(dbRef) {
+function poolPlayersRef(dbRef, poolId) {
+    return dbRef.collection('pools').doc(poolId).collection('players');
+}
+
+/**
+ * Get the Firestore collection reference for a pool's draft_log.
+ */
+function poolDraftLogRef(dbRef, poolId) {
+    return dbRef.collection('pools').doc(poolId).collection('draft_log');
+}
+
+/**
+ * Get the Firestore document reference for a pool's draft settings.
+ */
+function poolDraftSettingsRef(dbRef, poolId) {
+    return dbRef.collection('pools').doc(poolId).collection('settings').doc('draft');
+}
+
+/**
+ * Snapshot current ranks as previousRank, then recalculate points.
+ * Pool-aware version.
+ */
+async function snapshotRanksAndRecalculatePool(dbRef, poolId) {
     const [countriesSnap, playersSnap] = await Promise.all([
         dbRef.collection('countries').get(),
-        dbRef.collection('players').get()
+        poolPlayersRef(dbRef, poolId).get()
     ]);
     const countries = countriesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     const players = playersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -103,7 +110,7 @@ async function snapshotRanksAndRecalculate(dbRef) {
 
     const batch = dbRef.batch();
     ranked.forEach(p => {
-        batch.update(dbRef.collection('players').doc(p.id), {
+        batch.update(poolPlayersRef(dbRef, poolId).doc(p.id), {
             points: p.calculatedPoints,
             previousRank: p.rank
         });
@@ -112,14 +119,12 @@ async function snapshotRanksAndRecalculate(dbRef) {
 }
 
 /**
- * Recalculate all player scores from current country data.
- * Uses Firestore batch writes. Does NOT change previousRank.
- * @param {Object} dbRef - Firestore db reference
+ * Recalculate all player scores for a specific pool.
  */
-async function recalculateAllPlayerScores(dbRef) {
+async function recalculatePoolScores(dbRef, poolId) {
     const [countriesSnap, playersSnap] = await Promise.all([
         dbRef.collection('countries').get(),
-        dbRef.collection('players').get()
+        poolPlayersRef(dbRef, poolId).get()
     ]);
     const countries = countriesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     const players = playersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -127,7 +132,7 @@ async function recalculateAllPlayerScores(dbRef) {
 
     const batch = dbRef.batch();
     ranked.forEach(p => {
-        batch.update(dbRef.collection('players').doc(p.id), {
+        batch.update(poolPlayersRef(dbRef, poolId).doc(p.id), {
             points: p.calculatedPoints
         });
     });
@@ -135,18 +140,34 @@ async function recalculateAllPlayerScores(dbRef) {
 }
 
 /**
+ * Recalculate scores for ALL pools. Called after match results update countries.
+ */
+async function recalculateAllPoolScores(dbRef) {
+    const poolsSnap = await dbRef.collection('pools').get();
+    for (const poolDoc of poolsSnap.docs) {
+        await recalculatePoolScores(dbRef, poolDoc.id);
+    }
+}
+
+/**
+ * Snapshot ranks for ALL pools before a country change.
+ */
+async function snapshotAllPoolRanks(dbRef) {
+    const poolsSnap = await dbRef.collection('pools').get();
+    for (const poolDoc of poolsSnap.docs) {
+        await snapshotRanksAndRecalculatePool(dbRef, poolDoc.id);
+    }
+}
+
+// Legacy wrappers (used during migration period)
+async function snapshotRanksAndRecalculate(dbRef) { await snapshotAllPoolRanks(dbRef); }
+async function recalculateAllPlayerScores(dbRef) { await recalculateAllPoolScores(dbRef); }
+
+/**
  * Process a completed match result automatically.
- * Updates both countries' W/D/L, GF/GA, poolPoints.
- * Creates activity feed entries. Recalculates player scores.
- * @param {Object} dbRef - Firestore db reference
- * @param {string} homeTeam - Home country name
- * @param {string} awayTeam - Away country name
- * @param {number} homeScore - Home goals
- * @param {number} awayScore - Away goals
- * @param {Array} countriesList - Current countries data array
+ * Updates both countries, creates activity entries, recalculates ALL pools.
  */
 async function processMatchResult(dbRef, homeTeam, awayTeam, homeScore, awayScore, countriesList) {
-    // Determine result
     let homeResult, awayResult, homePts, awayPts;
     if (homeScore > awayScore) {
         homeResult = 'win'; awayResult = 'loss'; homePts = 2; awayPts = 0;
@@ -156,8 +177,8 @@ async function processMatchResult(dbRef, homeTeam, awayTeam, homeScore, awayScor
         homeResult = 'draw'; awayResult = 'draw'; homePts = 1; awayPts = 1;
     }
 
-    // Snapshot ranks before changes
-    await snapshotRanksAndRecalculate(dbRef);
+    // Snapshot ranks for ALL pools before changes
+    await snapshotAllPoolRanks(dbRef);
 
     const batch = dbRef.batch();
 
@@ -191,31 +212,27 @@ async function processMatchResult(dbRef, homeTeam, awayTeam, homeScore, awayScor
         batch.update(ref, updates);
     }
 
-    // Auto-create activity entries
-    const homeDesc = homeResult === 'win' ? `Defeated ${awayTeam} ${homeScore}-${awayScore}`
-        : homeResult === 'draw' ? `Draw vs ${awayTeam} ${homeScore}-${awayScore}`
-        : `Lost to ${awayTeam} ${awayScore}-${homeScore}`;
+    // Activity entries
+    const homeDesc = homeResult === 'win' ? 'Defeated ' + awayTeam + ' ' + homeScore + '-' + awayScore
+        : homeResult === 'draw' ? 'Draw vs ' + awayTeam + ' ' + homeScore + '-' + awayScore
+        : 'Lost to ' + awayTeam + ' ' + awayScore + '-' + homeScore;
     batch.set(dbRef.collection('activity_feed').doc(), {
-        country: homeTeam,
-        points: homePts,
-        description: homeDesc,
+        country: homeTeam, points: homePts, description: homeDesc,
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
     });
 
-    const awayDesc = awayResult === 'win' ? `Defeated ${homeTeam} ${awayScore}-${homeScore}`
-        : awayResult === 'draw' ? `Draw vs ${homeTeam} ${awayScore}-${homeScore}`
-        : `Lost to ${homeTeam} ${homeScore}-${awayScore}`;
+    const awayDesc = awayResult === 'win' ? 'Defeated ' + homeTeam + ' ' + awayScore + '-' + homeScore
+        : awayResult === 'draw' ? 'Draw vs ' + homeTeam + ' ' + awayScore + '-' + homeScore
+        : 'Lost to ' + homeTeam + ' ' + homeScore + '-' + awayScore;
     batch.set(dbRef.collection('activity_feed').doc(), {
-        country: awayTeam,
-        points: awayPts,
-        description: awayDesc,
+        country: awayTeam, points: awayPts, description: awayDesc,
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
     });
 
     await batch.commit();
 
-    // Recalculate all player scores from updated country data
-    await recalculateAllPlayerScores(dbRef);
+    // Recalculate ALL pools
+    await recalculateAllPoolScores(dbRef);
     updateLastUpdated(dbRef);
 }
 
