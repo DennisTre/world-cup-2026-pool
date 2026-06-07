@@ -199,6 +199,16 @@
 .draft-result-team .flag { margin-right: 4px; }
 .draft-result-tier { font-size: 0.6rem; color: var(--text-muted); letter-spacing: 1px; text-transform: uppercase; }
 
+/* Admin message cards */
+.admin-message-card {
+    background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px; margin-bottom: 6px;
+}
+.amc-msg-info { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+.amc-msg-name { font-family: var(--font-display); font-weight: 600; font-size: 0.85rem; color: var(--white); }
+.amc-msg-time { font-size: 0.7rem; color: var(--text-muted); }
+.amc-msg-text { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 8px; word-wrap: break-word; overflow-wrap: break-word; }
+
 /* Desktop overrides */
 @media (min-width: 769px) {
     .admin-panel { padding: 28px; }
