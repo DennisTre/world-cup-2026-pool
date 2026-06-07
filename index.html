@@ -23,6 +23,7 @@
             <nav class="main-nav">
                 <button class="nav-toggle" aria-label="Toggle navigation">☰</button>
                 <ul class="nav-links">
+                    <li><a href="#messageBoard">Board</a></li>
                     <li><a href="#leaderboard">Standings</a></li>
                     <li><a href="#players">Players</a></li>
                     <li><a href="#alive">Alive</a></li>
@@ -105,6 +106,26 @@
                     </div>
                 </div>
                 <div class="draft-public-footer" id="pubDraftFooter"></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- MESSAGE BOARD -->
+    <section class="section messageboard-section" id="messageBoard">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">MESSAGE BOARD</h2>
+                <div class="section-line"></div>
+            </div>
+            <div class="mb-post-form">
+                <div class="mb-form-row">
+                    <input type="text" id="mbName" class="mb-input mb-name-input" placeholder="Your name" maxlength="30">
+                    <input type="text" id="mbMessage" class="mb-input mb-message-input" placeholder="Type a message..." maxlength="280">
+                    <button class="btn btn-primary mb-send-btn" id="mbSendBtn">Post</button>
+                </div>
+            </div>
+            <div class="mb-feed" id="mbFeed">
+                <p class="empty-state">No messages yet. Be the first to post!</p>
             </div>
         </div>
     </section>
