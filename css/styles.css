@@ -109,6 +109,22 @@ body {
 .section-line { width: 48px; height: 3px; background: var(--gold); margin-top: 6px; border-radius: 2px; }
 .empty-state { color: var(--text-muted); text-align: center; padding: 32px 16px; font-size: 0.9rem; }
 
+/* ---- POOL SELECTOR ---- */
+.pool-selector-section { padding: 12px 0; background: var(--bg-primary); border-top: 1px solid var(--border); }
+.pool-selector { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.pool-tab {
+    font-family: var(--font-display); font-size: 0.8rem; font-weight: 600;
+    letter-spacing: 1.5px; padding: 10px 24px; border-radius: 24px;
+    border: 2px solid var(--border); background: var(--bg-card);
+    color: var(--text-muted); cursor: pointer; transition: var(--transition);
+    min-height: 44px; text-transform: uppercase;
+}
+.pool-tab.active {
+    background: var(--gold); color: #1a1a1a; border-color: var(--gold);
+    box-shadow: 0 0 12px rgba(212,168,67,0.3);
+}
+.pool-tab:not(.active):hover { border-color: var(--gold-dark); color: var(--gold); }
+
 /* ---- SUMMARY DASHBOARD ---- */
 .summary-section { padding: 20px 0; background: var(--bg-secondary); }
 .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
