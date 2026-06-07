@@ -1,15 +1,19 @@
 // ============================================
-// ADMIN PANEL - WORLD CUP 2026 POOL
-// Primary workflow: Open admin → update match result → save.
-// Everything else updates automatically via processMatchResult().
-// Tabs: Matches | Countries | Players | Settings
-// Removed: Activity tab, Bracket tab, Seed Data tab (moved to Settings)
+// ADMIN PANEL - WORLD CUP 2026 POOL (Multi-Pool)
+// Shared data: countries, matches, activity, site_settings
+// Per-pool data: players, draft_log, draft settings
+// Admin selects a pool; all pool actions scope to it.
 // ============================================
 
 let adminPlayers = [];
 let adminCountries = [];
 let adminMatches = [];
 let adminSettings = {};
+let adminDraftLogs = [];
+let adminDraftSettings = {};
+let adminPoolsList = [];
+let currentAdminPoolId = null;
+let adminPoolUnsubscribers = [];
 
 // ---- AUTH ----
 const loginSection = document.getElementById('loginSection');
@@ -21,7 +25,7 @@ auth.onAuthStateChanged(user => {
         loginSection.style.display = 'none';
         dashboard.style.display = '';
         logoutBtn.style.display = 'block';
-        initAdminListeners();
+        initAdminSharedListeners();
     } else {
         loginSection.style.display = '';
         dashboard.style.display = 'none';
@@ -31,11 +35,10 @@ auth.onAuthStateChanged(user => {
 
 document.getElementById('loginForm').addEventListener('submit', e => {
     e.preventDefault();
-    const email = document.getElementById('loginEmail').value;
-    const pw = document.getElementById('loginPassword').value;
-    auth.signInWithEmailAndPassword(email, pw).catch(err => {
-        document.getElementById('loginError').textContent = err.message;
-    });
+    auth.signInWithEmailAndPassword(
+        document.getElementById('loginEmail').value,
+        document.getElementById('loginPassword').value
+    ).catch(err => { document.getElementById('loginError').textContent = err.message; });
 });
 
 logoutBtn.addEventListener('click', () => auth.signOut());
@@ -46,125 +49,161 @@ document.querySelectorAll('.admin-tab').forEach(tab => {
         document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('.admin-panel').forEach(p => p.style.display = 'none');
         tab.classList.add('active');
-        document.getElementById(`tab-${tab.dataset.tab}`).style.display = '';
+        document.getElementById('tab-' + tab.dataset.tab).style.display = '';
     });
 });
 
 // ---- TOAST ----
 function showToast(msg, isError) {
-    const t = document.createElement('div');
+    var t = document.createElement('div');
     t.className = 'admin-toast';
     if (isError) t.style.background = '#991b1b';
     t.textContent = msg;
     document.body.appendChild(t);
-    setTimeout(() => t.remove(), 3000);
+    setTimeout(function() { t.remove(); }, 3000);
 }
 
-let adminDraftLogs = [];
-let adminDraftSettings = {};
+// ---- ADMIN POOL SELECTOR ----
+function renderAdminPoolSelector() {
+    var el = document.getElementById('adminPoolSelector');
+    if (!el) return;
+    el.innerHTML = adminPoolsList.map(function(p) {
+        return '<button class="pool-tab ' + (p.id === currentAdminPoolId ? 'active' : '') + '" data-pool="' + p.id + '">' + (p.name || p.id) + '</button>';
+    }).join('') + ' <button class="btn btn-sm btn-outline" id="createPoolBtn" style="margin-left:8px;">+ New Pool</button>';
 
-// ---- LISTENERS ----
-function initAdminListeners() {
-    db.collection('players').onSnapshot(snap => {
-        adminPlayers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        renderAdminPlayers();
+    el.querySelectorAll('.pool-tab').forEach(function(btn) {
+        btn.addEventListener('click', function() { switchAdminPool(btn.dataset.pool); });
     });
 
-    db.collection('countries').orderBy('name', 'asc').onSnapshot(snap => {
-        adminCountries = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    var createBtn = document.getElementById('createPoolBtn');
+    if (createBtn) createBtn.addEventListener('click', createNewPool);
+}
+
+function switchAdminPool(poolId) {
+    if (poolId === currentAdminPoolId) return;
+    currentAdminPoolId = poolId;
+    adminPoolUnsubscribers.forEach(function(fn) { fn(); });
+    adminPoolUnsubscribers = [];
+    adminPlayers = [];
+    adminDraftLogs = [];
+    adminDraftSettings = {};
+    attachAdminPoolListeners(poolId);
+    renderAdminPoolSelector();
+}
+
+// ---- CREATE NEW POOL ----
+async function createNewPool() {
+    var name = prompt('Enter pool name (e.g., Pool B):');
+    if (!name || !name.trim()) return;
+    try {
+        var docRef = await db.collection('pools').add({
+            name: name.trim(),
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        showToast('Pool "' + name.trim() + '" created!');
+        switchAdminPool(docRef.id);
+    } catch (err) {
+        showToast('Error: ' + err.message, true);
+    }
+}
+
+// ---- SHARED LISTENERS ----
+function initAdminSharedListeners() {
+    db.collection('countries').orderBy('name', 'asc').onSnapshot(function(snap) {
+        adminCountries = snap.docs.map(function(d) { return { id: d.id, ...d.data() }; });
         renderAdminCountries();
         renderAdminPlayers();
     });
 
-    db.collection('matches').orderBy('datetime', 'desc').onSnapshot(snap => {
-        adminMatches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    db.collection('matches').orderBy('datetime', 'desc').onSnapshot(function(snap) {
+        adminMatches = snap.docs.map(function(d) { return { id: d.id, ...d.data() }; });
         renderAdminMatches();
     });
 
-    db.collection('site_settings').doc('metadata').onSnapshot(doc => {
+    db.collection('site_settings').doc('metadata').onSnapshot(function(doc) {
         adminSettings = doc.exists ? doc.data() : {};
         renderAdminSettings();
     });
 
-    // Draft audit log listener
-    db.collection('draft_log').orderBy('timestamp', 'desc').onSnapshot(snap => {
-        adminDraftLogs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    // Pool registry
+    db.collection('pools').orderBy('name', 'asc').onSnapshot(function(snap) {
+        adminPoolsList = snap.docs.map(function(d) { return { id: d.id, ...d.data() }; });
+        if (!adminPoolsList.length) return;
+        if (!currentAdminPoolId || !adminPoolsList.find(function(p) { return p.id === currentAdminPoolId; })) {
+            switchAdminPool(adminPoolsList[0].id);
+        }
+        renderAdminPoolSelector();
+    });
+}
+
+// ---- PER-POOL LISTENERS ----
+function attachAdminPoolListeners(poolId) {
+    var pu = poolPlayersRef(db, poolId).onSnapshot(function(snap) {
+        adminPlayers = snap.docs.map(function(d) { return { id: d.id, ...d.data() }; });
+        renderAdminPlayers();
+    });
+    adminPoolUnsubscribers.push(pu);
+
+    var du = poolDraftLogRef(db, poolId).orderBy('timestamp', 'desc').onSnapshot(function(snap) {
+        adminDraftLogs = snap.docs.map(function(d) { return { id: d.id, ...d.data() }; });
         renderDraftAuditLog();
         renderDraftBadge();
     });
+    adminPoolUnsubscribers.push(du);
 
-    // Draft settings listener
-    db.collection('site_settings').doc('draft').onSnapshot(doc => {
+    var ds = poolDraftSettingsRef(db, poolId).onSnapshot(function(doc) {
         adminDraftSettings = doc.exists ? doc.data() : {};
         renderDraftLockStatus();
         renderDraftBadge();
     });
+    adminPoolUnsubscribers.push(ds);
 }
 
-// ============ MATCHES (PRIMARY TAB) ============
+// ============ MATCHES ============
 
-/** Render matches split into pending and completed, mobile-friendly cards */
 function renderAdminMatches() {
-    const pendingEl = document.getElementById('adminPendingMatches');
-    const completedEl = document.getElementById('adminCompletedMatches');
+    var pendingEl = document.getElementById('adminPendingMatches');
+    var completedEl = document.getElementById('adminCompletedMatches');
     if (!pendingEl || !completedEl) return;
-
-    const pending = adminMatches.filter(m => !m.completed);
-    const completed = adminMatches.filter(m => m.completed);
-
-    // Sort pending by date ascending
-    pending.sort((a, b) => {
-        const da = a.datetime?.toDate ? a.datetime.toDate() : new Date(a.datetime);
-        const db2 = b.datetime?.toDate ? b.datetime.toDate() : new Date(b.datetime);
+    var pending = adminMatches.filter(function(m) { return !m.completed; });
+    var completed = adminMatches.filter(function(m) { return m.completed; });
+    pending.sort(function(a, b) {
+        var da = a.datetime && a.datetime.toDate ? a.datetime.toDate() : new Date(a.datetime);
+        var db2 = b.datetime && b.datetime.toDate ? b.datetime.toDate() : new Date(b.datetime);
         return da - db2;
     });
-
-    pendingEl.innerHTML = pending.length ? pending.map(m => matchCard(m)).join('') :
-        '<p class="empty-state">No pending matches.</p>';
-
-    completedEl.innerHTML = completed.length ? completed.slice(0, 20).map(m => matchCard(m)).join('') :
-        '<p class="empty-state">No completed matches yet.</p>';
+    pendingEl.innerHTML = pending.length ? pending.map(matchCard).join('') : '<p class="empty-state">No pending matches.</p>';
+    completedEl.innerHTML = completed.length ? completed.slice(0, 20).map(matchCard).join('') : '<p class="empty-state">No completed matches yet.</p>';
 }
 
 function matchCard(m) {
-    const dt = m.datetime?.toDate ? m.datetime.toDate() : new Date(m.datetime);
-    const dateStr = dt.toLocaleDateString('en', { month: 'short', day: 'numeric' });
-    const timeStr = dt.toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' });
-    const score = m.completed ? `${m.homeScore} - ${m.awayScore}` : '';
-    const statusClass = m.completed ? 'admin-match-completed' : 'admin-match-pending';
-    const statusLabel = m.completed ? 'FINAL' : dateStr + ' ' + timeStr;
-
-    return `
-    <div class="admin-match-card ${statusClass}">
-        <div class="amc-teams">
-            <span class="amc-team">${getFlag(m.homeTeam)} ${m.homeTeam}</span>
-            <span class="amc-score">${score || 'vs'}</span>
-            <span class="amc-team">${getFlag(m.awayTeam)} ${m.awayTeam}</span>
-        </div>
-        <div class="amc-meta">
-            <span class="amc-round">${m.round || 'Group'}</span>
-            <span class="amc-status">${statusLabel}</span>
-        </div>
-        <div class="amc-actions">
-            <button class="btn btn-sm btn-primary" onclick="editMatch('${m.id}')">Edit</button>
-            <button class="btn btn-sm btn-danger" onclick="deleteMatch('${m.id}')">Del</button>
-        </div>
-    </div>`;
+    var dt = m.datetime && m.datetime.toDate ? m.datetime.toDate() : new Date(m.datetime);
+    var dateStr = dt.toLocaleDateString('en', { month: 'short', day: 'numeric' });
+    var timeStr = dt.toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' });
+    var score = m.completed ? m.homeScore + ' - ' + m.awayScore : '';
+    var statusClass = m.completed ? 'admin-match-completed' : 'admin-match-pending';
+    var statusLabel = m.completed ? 'FINAL' : dateStr + ' ' + timeStr;
+    return '<div class="admin-match-card ' + statusClass + '">' +
+        '<div class="amc-teams"><span class="amc-team">' + getFlag(m.homeTeam) + ' ' + m.homeTeam + '</span>' +
+        '<span class="amc-score">' + (score || 'vs') + '</span>' +
+        '<span class="amc-team">' + getFlag(m.awayTeam) + ' ' + m.awayTeam + '</span></div>' +
+        '<div class="amc-meta"><span class="amc-round">' + (m.round || 'Group') + '</span><span class="amc-status">' + statusLabel + '</span></div>' +
+        '<div class="amc-actions"><button class="btn btn-sm btn-primary" onclick="editMatch(\'' + m.id + '\')">Edit</button>' +
+        '<button class="btn btn-sm btn-danger" onclick="deleteMatch(\'' + m.id + '\')">Del</button></div></div>';
 }
 
-/** Save match — if marking completed, automatically process result */
-document.getElementById('matchForm').addEventListener('submit', async e => {
+document.getElementById('matchForm').addEventListener('submit', async function(e) {
     e.preventDefault();
-    const id = document.getElementById('matchId').value;
-    const dtVal = document.getElementById('matchDatetime').value;
-    const isCompleted = document.getElementById('matchCompleted').value === 'true';
-    const homeScore = parseInt(document.getElementById('matchHomeScore').value);
-    const awayScore = parseInt(document.getElementById('matchAwayScore').value);
-    const homeTeam = document.getElementById('matchHome').value.trim();
-    const awayTeam = document.getElementById('matchAway').value.trim();
+    var id = document.getElementById('matchId').value;
+    var dtVal = document.getElementById('matchDatetime').value;
+    var isCompleted = document.getElementById('matchCompleted').value === 'true';
+    var homeScore = parseInt(document.getElementById('matchHomeScore').value);
+    var awayScore = parseInt(document.getElementById('matchAwayScore').value);
+    var homeTeam = document.getElementById('matchHome').value.trim();
+    var awayTeam = document.getElementById('matchAway').value.trim();
 
-    const data = {
-        homeTeam, awayTeam,
+    var data = {
+        homeTeam: homeTeam, awayTeam: awayTeam,
         datetime: firebase.firestore.Timestamp.fromDate(new Date(dtVal)),
         round: document.getElementById('matchRound').value,
         homeScore: isNaN(homeScore) ? null : homeScore,
@@ -172,54 +211,35 @@ document.getElementById('matchForm').addEventListener('submit', async e => {
         completed: isCompleted
     };
 
-    // Check if this is a NEW completion (wasn't completed before)
-    let wasCompleted = false;
-    if (id) {
-        const existing = adminMatches.find(m => m.id === id);
-        if (existing) wasCompleted = existing.completed === true;
-    }
-    const isNewCompletion = isCompleted && !wasCompleted;
+    var wasCompleted = false;
+    if (id) { var existing = adminMatches.find(function(m) { return m.id === id; }); if (existing) wasCompleted = existing.completed === true; }
+    var isNewCompletion = isCompleted && !wasCompleted;
 
-    // Validate scores if completing
-    if (isCompleted && (isNaN(homeScore) || isNaN(awayScore))) {
-        showToast('Enter both scores to complete a match', true);
-        return;
-    }
+    if (isCompleted && (isNaN(homeScore) || isNaN(awayScore))) { showToast('Enter both scores to complete a match', true); return; }
 
     try {
-        if (id) {
-            await db.collection('matches').doc(id).update(data);
-        } else {
-            await db.collection('matches').add(data);
-        }
-
-        // If newly completed, auto-process country stats + player scores + activity
+        if (id) { await db.collection('matches').doc(id).update(data); }
+        else { await db.collection('matches').add(data); }
         if (isNewCompletion) {
             await processMatchResult(db, homeTeam, awayTeam, homeScore, awayScore, adminCountries);
-            showToast('Match completed! Stats updated automatically.');
-        } else {
-            updateLastUpdated(db);
-            showToast('Match saved');
-        }
+            showToast('Match completed! All pools updated.');
+        } else { updateLastUpdated(db); showToast('Match saved'); }
         clearMatchFormFn();
-    } catch (err) {
-        showToast('Error: ' + err.message, true);
-    }
+    } catch (err) { showToast('Error: ' + err.message, true); }
 });
 
 window.editMatch = function(id) {
-    const m = adminMatches.find(x => x.id === id);
+    var m = adminMatches.find(function(x) { return x.id === id; });
     if (!m) return;
     document.getElementById('matchId').value = m.id;
     document.getElementById('matchHome').value = m.homeTeam || '';
     document.getElementById('matchAway').value = m.awayTeam || '';
-    const dt = m.datetime?.toDate ? m.datetime.toDate() : new Date(m.datetime);
+    var dt = m.datetime && m.datetime.toDate ? m.datetime.toDate() : new Date(m.datetime);
     document.getElementById('matchDatetime').value = dt.toISOString().slice(0, 16);
     document.getElementById('matchRound').value = m.round || 'Group';
-    document.getElementById('matchHomeScore').value = m.homeScore ?? '';
-    document.getElementById('matchAwayScore').value = m.awayScore ?? '';
+    document.getElementById('matchHomeScore').value = m.homeScore != null ? m.homeScore : '';
+    document.getElementById('matchAwayScore').value = m.awayScore != null ? m.awayScore : '';
     document.getElementById('matchCompleted').value = m.completed ? 'true' : 'false';
-    // Scroll to form
     document.getElementById('matchForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
 };
 
@@ -230,45 +250,32 @@ window.deleteMatch = async function(id) {
     showToast('Match deleted');
 };
 
-function clearMatchFormFn() {
-    document.getElementById('matchId').value = '';
-    document.getElementById('matchForm').reset();
-}
+function clearMatchFormFn() { document.getElementById('matchId').value = ''; document.getElementById('matchForm').reset(); }
 document.getElementById('clearMatchForm').addEventListener('click', clearMatchFormFn);
 
 // ============ COUNTRIES ============
 
 function renderAdminCountries() {
-    const el = document.getElementById('adminCountriesList');
+    var el = document.getElementById('adminCountriesList');
     if (!el) return;
-    el.innerHTML = adminCountries.map(c => {
-        const statusClass = c.eliminated ? 'status-eliminated' : 'status-active';
-        const statusText = c.eliminated ? 'ELIM' : 'ALIVE';
-        return `
-        <div class="admin-country-card">
-            <div class="acc-info">
-                <span class="acc-flag">${getFlag(c.name)}</span>
-                <div class="acc-details">
-                    <span class="acc-name">${c.name}</span>
-                    <span class="acc-stats">${c.wins||0}W ${c.draws||0}D ${c.losses||0}L · ${c.goalsFor||0}GF ${c.goalsAgainst||0}GA · ${c.poolPoints||0}pts</span>
-                </div>
-                <span class="acc-status ${statusClass}">${statusText}</span>
-            </div>
-            <div class="acc-actions">
-                <button class="btn btn-sm btn-outline" onclick="editCountry('${c.id}')">Edit</button>
-                <button class="btn btn-sm btn-danger" onclick="deleteCountry('${c.id}')">Del</button>
-            </div>
-        </div>`;
+    el.innerHTML = adminCountries.map(function(c) {
+        var statusClass = c.eliminated ? 'status-eliminated' : 'status-active';
+        var statusText = c.eliminated ? 'ELIM' : 'ALIVE';
+        return '<div class="admin-country-card"><div class="acc-info"><span class="acc-flag">' + getFlag(c.name) + '</span>' +
+            '<div class="acc-details"><span class="acc-name">' + c.name + '</span>' +
+            '<span class="acc-stats">' + (c.wins||0) + 'W ' + (c.draws||0) + 'D ' + (c.losses||0) + 'L · ' + (c.goalsFor||0) + 'GF ' + (c.goalsAgainst||0) + 'GA · ' + (c.poolPoints||0) + 'pts</span></div>' +
+            '<span class="acc-status ' + statusClass + '">' + statusText + '</span></div>' +
+            '<div class="acc-actions"><button class="btn btn-sm btn-outline" onclick="editCountry(\'' + c.id + '\')">Edit</button>' +
+            '<button class="btn btn-sm btn-danger" onclick="deleteCountry(\'' + c.id + '\')">Del</button></div></div>';
     }).join('');
 }
 
-document.getElementById('countryForm').addEventListener('submit', async e => {
+document.getElementById('countryForm').addEventListener('submit', async function(e) {
     e.preventDefault();
-    const errEl = document.getElementById('countryValidationError');
+    var errEl = document.getElementById('countryValidationError');
     errEl.textContent = '';
-
-    const id = document.getElementById('countryId').value;
-    const data = {
+    var id = document.getElementById('countryId').value;
+    var data = {
         name: document.getElementById('countryName').value.trim(),
         eliminated: document.getElementById('countryEliminated').value === 'true',
         wins: parseInt(document.getElementById('countryWins').value) || 0,
@@ -278,28 +285,21 @@ document.getElementById('countryForm').addEventListener('submit', async e => {
         goalsAgainst: parseInt(document.getElementById('countryGA').value) || 0,
         poolPoints: parseInt(document.getElementById('countryPoolPoints').value) || 0
     };
-
-    const v = validateCountry(data);
+    var v = validateCountry(data);
     if (!v.valid) { errEl.textContent = v.errors.join('. '); return; }
-
     try {
-        await snapshotRanksAndRecalculate(db);
-        if (id) {
-            await db.collection('countries').doc(id).update(data);
-        } else {
-            await db.collection('countries').add(data);
-        }
-        await recalculateAllPlayerScores(db);
+        await snapshotAllPoolRanks(db);
+        if (id) { await db.collection('countries').doc(id).update(data); }
+        else { await db.collection('countries').add(data); }
+        await recalculateAllPoolScores(db);
         updateLastUpdated(db);
-        showToast('Country saved');
+        showToast('Country saved — all pools updated');
         clearCountryFormFn();
-    } catch (err) {
-        showToast('Error: ' + err.message, true);
-    }
+    } catch (err) { showToast('Error: ' + err.message, true); }
 });
 
 window.editCountry = function(id) {
-    const c = adminCountries.find(x => x.id === id);
+    var c = adminCountries.find(function(x) { return x.id === id; });
     if (!c) return;
     document.getElementById('countryId').value = c.id;
     document.getElementById('countryName').value = c.name || '';
@@ -317,76 +317,56 @@ window.editCountry = function(id) {
 window.deleteCountry = async function(id) {
     if (!confirm('Delete this country?')) return;
     await db.collection('countries').doc(id).delete();
-    await recalculateAllPlayerScores(db);
+    await recalculateAllPoolScores(db);
     updateLastUpdated(db);
     showToast('Country deleted');
 };
 
-function clearCountryFormFn() {
-    document.getElementById('countryId').value = '';
-    document.getElementById('countryForm').reset();
-    document.getElementById('countryValidationError').textContent = '';
-}
+function clearCountryFormFn() { document.getElementById('countryId').value = ''; document.getElementById('countryForm').reset(); document.getElementById('countryValidationError').textContent = ''; }
 document.getElementById('clearCountryForm').addEventListener('click', clearCountryFormFn);
 
-// ============ PLAYERS ============
+// ============ PLAYERS (pool-scoped) ============
 
 function renderAdminPlayers() {
-    const el = document.getElementById('adminPlayersList');
+    var el = document.getElementById('adminPlayersList');
     if (!el) return;
-    const ranked = buildRankedLeaderboard(adminPlayers, adminCountries);
-    el.innerHTML = ranked.map(p => `
-    <div class="admin-player-card">
-        <div class="apc-info">
-            <span class="apc-rank">#${p.rank}</span>
-            <div class="apc-details">
-                <span class="apc-team">${p.teamName}</span>
-                <span class="apc-owner">${p.ownerName}</span>
-                <div class="apc-flags">${(p.countries||[]).map(c => `<span class="flag" title="${c}">${getFlag(c)}</span>`).join(' ')}</div>
-            </div>
-            <span class="apc-pts">${p.calculatedPoints}</span>
-        </div>
-        <div class="apc-actions">
-            <button class="btn btn-sm btn-outline" onclick="editPlayer('${p.id}')">Edit</button>
-            <button class="btn btn-sm btn-danger" onclick="deletePlayer('${p.id}')">Del</button>
-        </div>
-    </div>`).join('');
+    var ranked = buildRankedLeaderboard(adminPlayers, adminCountries);
+    el.innerHTML = ranked.map(function(p) {
+        return '<div class="admin-player-card"><div class="apc-info"><span class="apc-rank">#' + p.rank + '</span>' +
+            '<div class="apc-details"><span class="apc-team">' + p.teamName + '</span><span class="apc-owner">' + p.ownerName + '</span>' +
+            '<div class="apc-flags">' + (p.countries||[]).map(function(c) { return '<span class="flag" title="' + c + '">' + getFlag(c) + '</span>'; }).join(' ') + '</div></div>' +
+            '<span class="apc-pts">' + p.calculatedPoints + '</span></div>' +
+            '<div class="apc-actions"><button class="btn btn-sm btn-outline" onclick="editPlayer(\'' + p.id + '\')">Edit</button>' +
+            '<button class="btn btn-sm btn-danger" onclick="deletePlayer(\'' + p.id + '\')">Del</button></div></div>';
+    }).join('');
 }
 
-document.getElementById('playerForm').addEventListener('submit', async e => {
+document.getElementById('playerForm').addEventListener('submit', async function(e) {
     e.preventDefault();
-    const errEl = document.getElementById('playerValidationError');
+    if (!currentAdminPoolId) { showToast('No pool selected', true); return; }
+    var errEl = document.getElementById('playerValidationError');
     errEl.textContent = '';
-
-    const id = document.getElementById('playerId').value;
-    const data = {
+    var id = document.getElementById('playerId').value;
+    var data = {
         ownerName: document.getElementById('playerOwner').value.trim(),
         teamName: document.getElementById('playerTeam').value.trim(),
-        countries: document.getElementById('playerCountries').value.split(',').map(s => s.trim()).filter(Boolean)
+        countries: document.getElementById('playerCountries').value.split(',').map(function(s) { return s.trim(); }).filter(Boolean)
     };
-
-    const v = validatePlayer(data);
+    var v = validatePlayer(data);
     if (!v.valid) { errEl.textContent = v.errors.join('. '); return; }
-
     try {
-        if (id) {
-            await db.collection('players').doc(id).update(data);
-        } else {
-            data.previousRank = null;
-            data.points = 0;
-            await db.collection('players').add(data);
-        }
-        await recalculateAllPlayerScores(db);
+        var ref = poolPlayersRef(db, currentAdminPoolId);
+        if (id) { await ref.doc(id).update(data); }
+        else { data.previousRank = null; data.points = 0; await ref.add(data); }
+        await recalculatePoolScores(db, currentAdminPoolId);
         updateLastUpdated(db);
         showToast('Player saved');
         clearPlayerFormFn();
-    } catch (err) {
-        showToast('Error: ' + err.message, true);
-    }
+    } catch (err) { showToast('Error: ' + err.message, true); }
 });
 
 window.editPlayer = function(id) {
-    const p = adminPlayers.find(x => x.id === id);
+    var p = adminPlayers.find(function(x) { return x.id === id; });
     if (!p) return;
     document.getElementById('playerId').value = p.id;
     document.getElementById('playerOwner').value = p.ownerName || '';
@@ -398,31 +378,27 @@ window.editPlayer = function(id) {
 
 window.deletePlayer = async function(id) {
     if (!confirm('Delete this player?')) return;
-    await db.collection('players').doc(id).delete();
+    await poolPlayersRef(db, currentAdminPoolId).doc(id).delete();
     updateLastUpdated(db);
     showToast('Player deleted');
 };
 
-function clearPlayerFormFn() {
-    document.getElementById('playerId').value = '';
-    document.getElementById('playerForm').reset();
-    document.getElementById('playerValidationError').textContent = '';
-}
+function clearPlayerFormFn() { document.getElementById('playerId').value = ''; document.getElementById('playerForm').reset(); document.getElementById('playerValidationError').textContent = ''; }
 document.getElementById('clearPlayerForm').addEventListener('click', clearPlayerFormFn);
 
 // ============ SETTINGS ============
 
 function renderAdminSettings() {
-    const stageEl = document.getElementById('settingsTournamentStage');
+    var stageEl = document.getElementById('settingsTournamentStage');
     if (stageEl && adminSettings.tournamentStage) stageEl.value = adminSettings.tournamentStage;
-    const luEl = document.getElementById('settingsLastUpdated');
+    var luEl = document.getElementById('settingsLastUpdated');
     if (luEl && adminSettings.lastUpdated) {
-        const d = adminSettings.lastUpdated.toDate ? adminSettings.lastUpdated.toDate() : new Date(adminSettings.lastUpdated);
+        var d = adminSettings.lastUpdated.toDate ? adminSettings.lastUpdated.toDate() : new Date(adminSettings.lastUpdated);
         luEl.textContent = 'Last updated: ' + d.toLocaleString();
     }
 }
 
-document.getElementById('settingsForm').addEventListener('submit', async e => {
+document.getElementById('settingsForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     try {
         await db.collection('site_settings').doc('metadata').set({
@@ -430,60 +406,43 @@ document.getElementById('settingsForm').addEventListener('submit', async e => {
             lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
         showToast('Settings saved');
-    } catch (err) {
-        showToast('Error: ' + err.message, true);
-    }
+    } catch (err) { showToast('Error: ' + err.message, true); }
 });
 
-// ============ TIERED DRAFT LOTTERY ============
+// ============ DRAFT (pool-scoped) ============
 
-/** Draft tier definitions — exactly 12 teams per tier, 48 total */
-const DRAFT_TIERS = {
+var DRAFT_TIERS = {
     1: ["France","Spain","England","Colombia","Argentina","Portugal","Brazil","Netherlands","Germany","Croatia","Belgium","USA"],
     2: ["Morocco","Mexico","Uruguay","Norway","Ecuador","Japan","Switzerland","Korea Republic","Türkiye","Canada","Senegal","Austria"],
     3: ["Sweden","Paraguay","Scotland","Ghana","Czechia","IR Iran","Saudi Arabia","Bosnia and Herzegovina","Algeria","Egypt","Côte d'Ivoire","Australia"],
     4: ["Jordan","Tunisia","Congo DR","Uzbekistan","Qatar","Iraq","New Zealand","Cabo Verde","South Africa","Panama","Curaçao","Haiti"]
 };
 
-/** Fisher-Yates shuffle */
 function shuffleArray(arr) {
-    const a = [...arr];
-    for (let i = a.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [a[i], a[j]] = [a[j], a[i]];
+    var a = arr.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
     }
     return a;
 }
 
-/** Run the tiered draft: shuffle each tier, assign one per player from each tier */
 function generateDraft(playerList) {
-    const t1 = shuffleArray(DRAFT_TIERS[1]);
-    const t2 = shuffleArray(DRAFT_TIERS[2]);
-    const t3 = shuffleArray(DRAFT_TIERS[3]);
-    const t4 = shuffleArray(DRAFT_TIERS[4]);
-
-    return playerList.map((p, i) => ({
-        playerId: p.id,
-        ownerName: p.ownerName,
-        teamName: p.teamName,
-        countries: [t1[i], t2[i], t3[i], t4[i]]
-    }));
+    var t1 = shuffleArray(DRAFT_TIERS[1]), t2 = shuffleArray(DRAFT_TIERS[2]);
+    var t3 = shuffleArray(DRAFT_TIERS[3]), t4 = shuffleArray(DRAFT_TIERS[4]);
+    return playerList.map(function(p, i) {
+        return { playerId: p.id, ownerName: p.ownerName, teamName: p.teamName, countries: [t1[i], t2[i], t3[i], t4[i]] };
+    });
 }
 
-/** Show a custom confirmation modal, returns a Promise<boolean> */
 function showConfirmModal(title, text) {
-    return new Promise(resolve => {
+    return new Promise(function(resolve) {
         document.getElementById('confirmModalTitle').textContent = title;
         document.getElementById('confirmModalText').textContent = text;
         document.getElementById('confirmModal').style.display = 'flex';
-        const yesBtn = document.getElementById('confirmModalYes');
-        const handler = () => {
-            document.getElementById('confirmModal').style.display = 'none';
-            yesBtn.removeEventListener('click', handler);
-            resolve(true);
-        };
+        var yesBtn = document.getElementById('confirmModalYes');
+        function handler() { document.getElementById('confirmModal').style.display = 'none'; yesBtn.removeEventListener('click', handler); resolve(true); }
         yesBtn.addEventListener('click', handler);
-        // Cancel closes via inline onclick, resolve false on overlay click
         document.getElementById('confirmModal').addEventListener('click', function cancelHandler(e) {
             if (e.target === document.getElementById('confirmModal')) {
                 document.getElementById('confirmModal').style.display = 'none';
@@ -494,198 +453,166 @@ function showConfirmModal(title, text) {
     });
 }
 
-/** Show draft results in a modal */
 function showDraftResultsModal(results, runNumber) {
-    const body = document.getElementById('draftModalBody');
-    document.getElementById('draftModalTitle').textContent = `Draft Run #${runNumber} Results`;
-    body.innerHTML = results.map(r => `
-        <div class="draft-result-player">
-            <div class="draft-result-name">${r.ownerName} — ${r.teamName}</div>
-            <div class="draft-result-teams">
-                ${r.countries.map((c, i) => `<div class="draft-result-team"><span class="flag">${getFlag(c)}</span> ${c} <span class="draft-result-tier">TIER ${i+1}</span></div>`).join('')}
-            </div>
-        </div>
-    `).join('');
+    var body = document.getElementById('draftModalBody');
+    document.getElementById('draftModalTitle').textContent = 'Draft Run #' + runNumber + ' Results';
+    body.innerHTML = results.map(function(r) {
+        return '<div class="draft-result-player"><div class="draft-result-name">' + r.ownerName + ' — ' + r.teamName + '</div>' +
+            '<div class="draft-result-teams">' + r.countries.map(function(c, i) {
+                return '<div class="draft-result-team"><span class="flag">' + getFlag(c) + '</span> ' + c + ' <span class="draft-result-tier">TIER ' + (i+1) + '</span></div>';
+            }).join('') + '</div></div>';
+    }).join('');
     document.getElementById('draftModal').style.display = 'flex';
 }
 
-/** Render draft audit log */
 function renderDraftAuditLog() {
-    const el = document.getElementById('draftAuditLog');
+    var el = document.getElementById('draftAuditLog');
     if (!el) return;
-    if (!adminDraftLogs.length) {
-        el.innerHTML = '<p class="empty-state">No draft runs yet.</p>';
-        return;
-    }
-    el.innerHTML = adminDraftLogs.map(log => {
-        const ts = log.timestamp?.toDate ? log.timestamp.toDate() : new Date(log.timestamp);
-        const timeStr = ts.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
-        return `
-        <div class="draft-log-entry">
-            <div class="draft-log-header">
-                <span class="draft-log-run">Draft Run #${log.runNumber}</span>
-                <span class="draft-log-time">${timeStr}</span>
-            </div>
-            <div class="draft-log-admin">by ${log.adminEmail || 'admin'}</div>
-        </div>`;
+    if (!adminDraftLogs.length) { el.innerHTML = '<p class="empty-state">No draft runs yet.</p>'; return; }
+    el.innerHTML = adminDraftLogs.map(function(log) {
+        var ts = log.timestamp && log.timestamp.toDate ? log.timestamp.toDate() : new Date(log.timestamp);
+        var timeStr = ts.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+        return '<div class="draft-log-entry"><div class="draft-log-header"><span class="draft-log-run">Draft Run #' + log.runNumber + '</span>' +
+            '<span class="draft-log-time">' + timeStr + '</span></div><div class="draft-log-admin">by ' + (log.adminEmail || 'admin') + '</div></div>';
     }).join('');
 }
 
-/** Render draft runs badge */
 function renderDraftBadge() {
-    const el = document.getElementById('draftRunsBadge');
+    var el = document.getElementById('draftRunsBadge');
     if (!el) return;
-    const count = adminDraftLogs.length;
-    el.textContent = count > 0 ? `Draft Lottery Runs: ${count}` : '';
+    el.textContent = adminDraftLogs.length > 0 ? 'Draft Lottery Runs: ' + adminDraftLogs.length : '';
 }
 
-/** Render draft lock status and disable/enable buttons */
 function renderDraftLockStatus() {
-    const el = document.getElementById('draftLockStatus');
-    const runBtn = document.getElementById('runDraftBtn');
-    const clearBtn = document.getElementById('clearDraftBtn');
-    const lockBtn = document.getElementById('lockDraftBtn');
+    var el = document.getElementById('draftLockStatus');
+    var runBtn = document.getElementById('runDraftBtn');
+    var clearBtn = document.getElementById('clearDraftBtn');
+    var lockBtn = document.getElementById('lockDraftBtn');
     if (!el) return;
-
-    const isLocked = adminDraftSettings.draftLocked === true;
-    const runs = adminDraftLogs.length;
-
+    var isLocked = adminDraftSettings.draftLocked === true;
+    var runs = adminDraftLogs.length;
     if (isLocked) {
         el.className = 'draft-lock-status locked';
-        el.textContent = `Draft Locked After ${runs} Run${runs !== 1 ? 's' : ''}`;
+        el.textContent = 'Draft Locked After ' + runs + ' Run' + (runs !== 1 ? 's' : '');
         if (runBtn) runBtn.disabled = true;
         if (clearBtn) clearBtn.disabled = true;
         if (lockBtn) lockBtn.textContent = 'Unlock Draft';
     } else {
-        if (runs > 0) {
-            el.className = 'draft-lock-status unlocked';
-            el.textContent = 'Draft Unlocked';
-        } else {
-            el.className = 'draft-lock-status';
-            el.style.display = 'none';
-        }
+        if (runs > 0) { el.className = 'draft-lock-status unlocked'; el.textContent = 'Draft Unlocked'; }
+        else { el.className = 'draft-lock-status'; el.style.display = 'none'; }
         if (runBtn) runBtn.disabled = false;
         if (clearBtn) clearBtn.disabled = false;
         if (lockBtn) lockBtn.textContent = 'Lock Draft';
     }
 }
 
-/** Run Draft button handler */
-document.getElementById('runDraftBtn').addEventListener('click', async () => {
-    if (adminDraftSettings.draftLocked) {
-        showToast('Draft is locked. Unlock first.', true);
-        return;
-    }
-
-    if (adminPlayers.length !== 12) {
-        showToast(`Need exactly 12 players. Currently have ${adminPlayers.length}.`, true);
-        return;
-    }
-
-    const confirmed = await showConfirmModal(
-        'Run Tiered Draft Lottery',
-        'This will clear all current team assignments and randomly generate a new tiered draft. Continue?'
-    );
+document.getElementById('runDraftBtn').addEventListener('click', async function() {
+    if (!currentAdminPoolId) { showToast('No pool selected', true); return; }
+    if (adminDraftSettings.draftLocked) { showToast('Draft is locked. Unlock first.', true); return; }
+    if (adminPlayers.length !== 12) { showToast('Need exactly 12 players. Currently have ' + adminPlayers.length + '.', true); return; }
+    var confirmed = await showConfirmModal('Run Tiered Draft Lottery', 'This will clear all current team assignments for this pool and randomly generate a new tiered draft. Continue?');
     if (!confirmed) return;
-
     try {
         showToast('Running draft...');
-
-        // Generate the draft
-        const results = generateDraft(adminPlayers);
-
-        // Snapshot ranks before changes
-        await snapshotRanksAndRecalculate(db);
-
-        // Batch update all player country assignments
-        const batch = db.batch();
-        results.forEach(r => {
-            batch.update(db.collection('players').doc(r.playerId), {
-                countries: r.countries
-            });
-        });
+        var results = generateDraft(adminPlayers);
+        await snapshotRanksAndRecalculatePool(db, currentAdminPoolId);
+        var batch = db.batch();
+        results.forEach(function(r) { batch.update(poolPlayersRef(db, currentAdminPoolId).doc(r.playerId), { countries: r.countries }); });
         await batch.commit();
-
-        // Recalculate scores
-        await recalculateAllPlayerScores(db);
-
-        // Determine run number
-        const runNumber = adminDraftLogs.length + 1;
-
-        // Log to draft_log collection
-        const user = auth.currentUser;
-        await db.collection('draft_log').add({
-            runNumber: runNumber,
-            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+        await recalculatePoolScores(db, currentAdminPoolId);
+        var runNumber = adminDraftLogs.length + 1;
+        var user = auth.currentUser;
+        await poolDraftLogRef(db, currentAdminPoolId).add({
+            runNumber: runNumber, timestamp: firebase.firestore.FieldValue.serverTimestamp(),
             adminEmail: user ? user.email : 'unknown',
-            results: results.map(r => ({ ownerName: r.ownerName, teamName: r.teamName, countries: r.countries }))
+            results: results.map(function(r) { return { ownerName: r.ownerName, teamName: r.teamName, countries: r.countries }; })
         });
-
-        // Update draft run count in site_settings
-        await db.collection('site_settings').doc('draft').set({
-            totalRuns: runNumber,
-            draftLocked: adminDraftSettings.draftLocked || false,
+        await poolDraftSettingsRef(db, currentAdminPoolId).set({
+            totalRuns: runNumber, draftLocked: adminDraftSettings.draftLocked || false,
             lastDraftTimestamp: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
-
         updateLastUpdated(db);
-
-        // Show results modal
         showDraftResultsModal(results, runNumber);
-        showToast('Draft complete! Assignments saved.');
-    } catch (err) {
-        showToast('Error: ' + err.message, true);
-    }
+        showToast('Draft complete!');
+    } catch (err) { showToast('Error: ' + err.message, true); }
 });
 
-/** Clear All Assignments button handler */
-document.getElementById('clearDraftBtn').addEventListener('click', async () => {
-    if (adminDraftSettings.draftLocked) {
-        showToast('Draft is locked. Unlock first.', true);
-        return;
-    }
-
-    const confirmed = await showConfirmModal(
-        'Clear All Assignments',
-        'This will remove all team assignments from every player. Continue?'
-    );
+document.getElementById('clearDraftBtn').addEventListener('click', async function() {
+    if (!currentAdminPoolId) return;
+    if (adminDraftSettings.draftLocked) { showToast('Draft is locked.', true); return; }
+    var confirmed = await showConfirmModal('Clear All Assignments', 'Remove all team assignments for this pool?');
     if (!confirmed) return;
-
     try {
-        const batch = db.batch();
-        adminPlayers.forEach(p => {
-            batch.update(db.collection('players').doc(p.id), { countries: [] });
-        });
+        var batch = db.batch();
+        adminPlayers.forEach(function(p) { batch.update(poolPlayersRef(db, currentAdminPoolId).doc(p.id), { countries: [] }); });
         await batch.commit();
-        await recalculateAllPlayerScores(db);
+        await recalculatePoolScores(db, currentAdminPoolId);
         updateLastUpdated(db);
-        showToast('All assignments cleared.');
-    } catch (err) {
-        showToast('Error: ' + err.message, true);
-    }
+        showToast('Assignments cleared.');
+    } catch (err) { showToast('Error: ' + err.message, true); }
 });
 
-/** Lock/Unlock Draft button handler */
-document.getElementById('lockDraftBtn').addEventListener('click', async () => {
-    const isCurrentlyLocked = adminDraftSettings.draftLocked === true;
-    const action = isCurrentlyLocked ? 'Unlock' : 'Lock';
-    const runs = adminDraftLogs.length;
+document.getElementById('lockDraftBtn').addEventListener('click', async function() {
+    if (!currentAdminPoolId) return;
+    var isLocked = adminDraftSettings.draftLocked === true;
+    var action = isLocked ? 'Unlock' : 'Lock';
+    var runs = adminDraftLogs.length;
+    var confirmed = await showConfirmModal(action + ' Draft',
+        isLocked ? 'Unlock the draft for this pool?' : 'Lock the draft after ' + runs + ' run' + (runs !== 1 ? 's' : '') + '?');
+    if (!confirmed) return;
+    try {
+        await poolDraftSettingsRef(db, currentAdminPoolId).set({
+            draftLocked: !isLocked, totalRuns: runs
+        }, { merge: true });
+        showToast('Draft ' + (isLocked ? 'unlocked' : 'locked') + '.');
+    } catch (err) { showToast('Error: ' + err.message, true); }
+});
 
-    const confirmed = await showConfirmModal(
-        `${action} Draft`,
-        isCurrentlyLocked
-            ? 'This will unlock the draft, allowing new draft runs and assignment changes. Continue?'
-            : `This will lock the draft after ${runs} run${runs !== 1 ? 's' : ''}. No team assignments can be changed until unlocked. Continue?`
-    );
+// ============ MIGRATION ============
+
+document.getElementById('migrateBtn').addEventListener('click', async function() {
+    var confirmed = await showConfirmModal('Migrate to Multi-Pool',
+        'This will copy all existing players and draft data into "Pool A". Existing data stays intact. Only run this once. Continue?');
     if (!confirmed) return;
 
     try {
-        await db.collection('site_settings').doc('draft').set({
-            draftLocked: !isCurrentlyLocked,
-            totalRuns: runs,
-            lastDraftTimestamp: adminDraftSettings.lastDraftTimestamp || null
-        }, { merge: true });
-        showToast(`Draft ${isCurrentlyLocked ? 'unlocked' : 'locked'}.`);
+        showToast('Migrating...');
+
+        // 1. Create Pool A document if it doesn't exist
+        var poolARef = db.collection('pools').doc('pool-a');
+        var poolADoc = await poolARef.get();
+        if (!poolADoc.exists) {
+            await poolARef.set({ name: 'Pool A', createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+        }
+
+        // 2. Copy players from top-level to pools/pool-a/players
+        var playersSnap = await db.collection('players').get();
+        if (playersSnap.size > 0) {
+            var batch = db.batch();
+            playersSnap.docs.forEach(function(doc) {
+                batch.set(poolPlayersRef(db, 'pool-a').doc(doc.id), doc.data());
+            });
+            await batch.commit();
+            showToast('Migrated ' + playersSnap.size + ' players to Pool A');
+        }
+
+        // 3. Copy draft_log from top-level to pools/pool-a/draft_log
+        var draftSnap = await db.collection('draft_log').get();
+        if (draftSnap.size > 0) {
+            var batch2 = db.batch();
+            draftSnap.docs.forEach(function(doc) {
+                batch2.set(poolDraftLogRef(db, 'pool-a').doc(doc.id), doc.data());
+            });
+            await batch2.commit();
+        }
+
+        // 4. Copy draft settings from site_settings/draft to pools/pool-a/settings/draft
+        var draftSettingsDoc = await db.collection('site_settings').doc('draft').get();
+        if (draftSettingsDoc.exists) {
+            await poolDraftSettingsRef(db, 'pool-a').set(draftSettingsDoc.data());
+        }
+
+        showToast('Migration complete! Pool A is ready.');
     } catch (err) {
         showToast('Error: ' + err.message, true);
     }
@@ -693,111 +620,30 @@ document.getElementById('lockDraftBtn').addEventListener('click', async () => {
 
 // ============ SEED DATA ============
 
-document.getElementById('seedDataBtn').addEventListener('click', async () => {
-    if (!confirm('This will add sample data. Proceed?')) return;
-    const status = document.getElementById('seedStatus');
+document.getElementById('seedDataBtn').addEventListener('click', async function() {
+    if (!confirm('This will add sample countries. Proceed?')) return;
+    var status = document.getElementById('seedStatus');
     status.innerHTML = '<p style="color:var(--gold);">Seeding...</p>';
-
-    const allCountries = [
-        { name:"Brazil",wins:3,draws:0,losses:0,goalsFor:7,goalsAgainst:1,poolPoints:8,eliminated:false },
-        { name:"Germany",wins:2,draws:1,losses:0,goalsFor:5,goalsAgainst:2,poolPoints:7,eliminated:false },
-        { name:"Japan",wins:1,draws:1,losses:1,goalsFor:3,goalsAgainst:3,poolPoints:5,eliminated:false },
-        { name:"Morocco",wins:2,draws:0,losses:1,goalsFor:4,goalsAgainst:3,poolPoints:6,eliminated:false },
-        { name:"Ecuador",wins:0,draws:1,losses:2,goalsFor:2,goalsAgainst:5,poolPoints:1,eliminated:false },
-        { name:"France",wins:2,draws:1,losses:0,goalsFor:6,goalsAgainst:2,poolPoints:7,eliminated:false },
-        { name:"Portugal",wins:2,draws:0,losses:1,goalsFor:5,goalsAgainst:3,poolPoints:6,eliminated:false },
-        { name:"South Korea",wins:1,draws:0,losses:2,goalsFor:2,goalsAgainst:4,poolPoints:4,eliminated:false },
-        { name:"Cameroon",wins:0,draws:2,losses:1,goalsFor:3,goalsAgainst:4,poolPoints:2,eliminated:false },
-        { name:"Panama",wins:0,draws:0,losses:3,goalsFor:1,goalsAgainst:7,poolPoints:0,eliminated:true },
-        { name:"Argentina",wins:3,draws:0,losses:0,goalsFor:8,goalsAgainst:2,poolPoints:11,eliminated:false },
-        { name:"Netherlands",wins:2,draws:1,losses:0,goalsFor:5,goalsAgainst:1,poolPoints:7,eliminated:false },
-        { name:"USA",wins:1,draws:2,losses:0,goalsFor:4,goalsAgainst:3,poolPoints:4,eliminated:false },
-        { name:"Senegal",wins:1,draws:0,losses:2,goalsFor:3,goalsAgainst:5,poolPoints:2,eliminated:false },
-        { name:"New Zealand",wins:0,draws:1,losses:2,goalsFor:1,goalsAgainst:4,poolPoints:1,eliminated:true },
-        { name:"Spain",wins:2,draws:1,losses:0,goalsFor:6,goalsAgainst:2,poolPoints:7,eliminated:false },
-        { name:"England",wins:2,draws:0,losses:1,goalsFor:5,goalsAgainst:3,poolPoints:6,eliminated:false },
-        { name:"Mexico",wins:1,draws:1,losses:1,goalsFor:3,goalsAgainst:3,poolPoints:5,eliminated:false },
-        { name:"Ghana",wins:0,draws:1,losses:2,goalsFor:2,goalsAgainst:5,poolPoints:1,eliminated:false },
-        { name:"Saudi Arabia",wins:1,draws:0,losses:2,goalsFor:2,goalsAgainst:4,poolPoints:2,eliminated:true },
-        { name:"Belgium",wins:1,draws:1,losses:1,goalsFor:3,goalsAgainst:3,poolPoints:5,eliminated:false },
-        { name:"Croatia",wins:2,draws:1,losses:0,goalsFor:4,goalsAgainst:1,poolPoints:7,eliminated:false },
-        { name:"Colombia",wins:1,draws:1,losses:1,goalsFor:4,goalsAgainst:4,poolPoints:3,eliminated:false },
-        { name:"Tunisia",wins:0,draws:1,losses:2,goalsFor:1,goalsAgainst:4,poolPoints:1,eliminated:true },
-        { name:"Jamaica",wins:0,draws:0,losses:3,goalsFor:0,goalsAgainst:6,poolPoints:0,eliminated:true },
-        { name:"Italy",wins:2,draws:0,losses:1,goalsFor:5,goalsAgainst:3,poolPoints:6,eliminated:false },
-        { name:"Uruguay",wins:1,draws:2,losses:0,goalsFor:3,goalsAgainst:2,poolPoints:4,eliminated:false },
-        { name:"Denmark",wins:1,draws:1,losses:1,goalsFor:3,goalsAgainst:3,poolPoints:3,eliminated:false },
-        { name:"Iran",wins:0,draws:1,losses:2,goalsFor:2,goalsAgainst:5,poolPoints:1,eliminated:true },
-        { name:"Costa Rica",wins:0,draws:0,losses:3,goalsFor:1,goalsAgainst:8,poolPoints:0,eliminated:true },
-        { name:"Switzerland",wins:1,draws:1,losses:1,goalsFor:3,goalsAgainst:3,poolPoints:3,eliminated:false },
-        { name:"Poland",wins:1,draws:0,losses:2,goalsFor:2,goalsAgainst:4,poolPoints:2,eliminated:false },
-        { name:"Chile",wins:1,draws:1,losses:1,goalsFor:3,goalsAgainst:3,poolPoints:3,eliminated:false },
-        { name:"Nigeria",wins:1,draws:0,losses:2,goalsFor:3,goalsAgainst:5,poolPoints:2,eliminated:false },
-        { name:"Norway",wins:0,draws:1,losses:2,goalsFor:1,goalsAgainst:3,poolPoints:1,eliminated:true },
-        { name:"Turkey",wins:1,draws:1,losses:1,goalsFor:4,goalsAgainst:4,poolPoints:3,eliminated:false },
-        { name:"Serbia",wins:0,draws:2,losses:1,goalsFor:2,goalsAgainst:3,poolPoints:2,eliminated:false },
-        { name:"Peru",wins:0,draws:1,losses:2,goalsFor:1,goalsAgainst:4,poolPoints:1,eliminated:true },
-        { name:"Australia",wins:1,draws:0,losses:2,goalsFor:2,goalsAgainst:5,poolPoints:2,eliminated:false },
-        { name:"Qatar",wins:0,draws:0,losses:3,goalsFor:0,goalsAgainst:7,poolPoints:0,eliminated:true },
-        { name:"Ukraine",wins:1,draws:1,losses:1,goalsFor:3,goalsAgainst:3,poolPoints:3,eliminated:false },
-        { name:"Sweden",wins:0,draws:2,losses:1,goalsFor:2,goalsAgainst:3,poolPoints:2,eliminated:false },
-        { name:"Paraguay",wins:0,draws:1,losses:2,goalsFor:1,goalsAgainst:4,poolPoints:1,eliminated:true },
-        { name:"Egypt",wins:0,draws:0,losses:3,goalsFor:1,goalsAgainst:6,poolPoints:0,eliminated:true },
-        { name:"Scotland",wins:0,draws:1,losses:2,goalsFor:1,goalsAgainst:4,poolPoints:1,eliminated:true },
-        { name:"Ivory Coast",wins:1,draws:1,losses:1,goalsFor:3,goalsAgainst:3,poolPoints:3,eliminated:false },
-        { name:"Venezuela",wins:0,draws:2,losses:1,goalsFor:2,goalsAgainst:3,poolPoints:2,eliminated:false },
-        { name:"Canada",wins:1,draws:0,losses:2,goalsFor:2,goalsAgainst:4,poolPoints:2,eliminated:false },
-        { name:"Wales",wins:0,draws:0,losses:3,goalsFor:0,goalsAgainst:5,poolPoints:0,eliminated:true },
-        { name:"Ireland",wins:0,draws:1,losses:2,goalsFor:1,goalsAgainst:3,poolPoints:1,eliminated:true }
+    // Seed countries only (shared). Players go into pools via draft.
+    var allCountries = [
+        {name:"Brazil",wins:0,draws:0,losses:0,goalsFor:0,goalsAgainst:0,poolPoints:0,eliminated:false},
+        {name:"Germany",wins:0,draws:0,losses:0,goalsFor:0,goalsAgainst:0,poolPoints:0,eliminated:false},
+        {name:"France",wins:0,draws:0,losses:0,goalsFor:0,goalsAgainst:0,poolPoints:0,eliminated:false},
+        {name:"Argentina",wins:0,draws:0,losses:0,goalsFor:0,goalsAgainst:0,poolPoints:0,eliminated:false},
+        {name:"Spain",wins:0,draws:0,losses:0,goalsFor:0,goalsAgainst:0,poolPoints:0,eliminated:false},
+        {name:"England",wins:0,draws:0,losses:0,goalsFor:0,goalsAgainst:0,poolPoints:0,eliminated:false},
+        {name:"Netherlands",wins:0,draws:0,losses:0,goalsFor:0,goalsAgainst:0,poolPoints:0,eliminated:false},
+        {name:"Portugal",wins:0,draws:0,losses:0,goalsFor:0,goalsAgainst:0,poolPoints:0,eliminated:false},
+        {name:"Belgium",wins:0,draws:0,losses:0,goalsFor:0,goalsAgainst:0,poolPoints:0,eliminated:false},
+        {name:"Croatia",wins:0,draws:0,losses:0,goalsFor:0,goalsAgainst:0,poolPoints:0,eliminated:false},
+        {name:"Colombia",wins:0,draws:0,losses:0,goalsFor:0,goalsAgainst:0,poolPoints:0,eliminated:false},
+        {name:"USA",wins:0,draws:0,losses:0,goalsFor:0,goalsAgainst:0,poolPoints:0,eliminated:false}
     ];
-
-    const players = [
-        { ownerName:"Dennis",teamName:"The Soccer Dads",countries:["Brazil","Germany","Japan","Morocco","Ecuador"],previousRank:null,points:0 },
-        { ownerName:"Mike",teamName:"Mike's Mavericks",countries:["France","Portugal","South Korea","Cameroon","Panama"],previousRank:null,points:0 },
-        { ownerName:"Sarah",teamName:"Sarah's Strikers",countries:["Argentina","Netherlands","USA","Senegal","New Zealand"],previousRank:null,points:0 },
-        { ownerName:"Tom",teamName:"Tom's Titans",countries:["Spain","England","Mexico","Ghana","Saudi Arabia"],previousRank:null,points:0 },
-        { ownerName:"Jessica",teamName:"Jess FC",countries:["Belgium","Croatia","Colombia","Tunisia","Jamaica"],previousRank:null,points:0 },
-        { ownerName:"Chris",teamName:"Chris's Crushers",countries:["Italy","Uruguay","Denmark","Iran","Costa Rica"],previousRank:null,points:0 },
-        { ownerName:"Dave",teamName:"Dave's Dynamos",countries:["Switzerland","Poland","Chile","Nigeria","Norway"],previousRank:null,points:0 },
-        { ownerName:"Emily",teamName:"Emily's Eagles",countries:["Turkey","Serbia","Peru","Australia","Qatar"],previousRank:null,points:0 },
-        { ownerName:"Ryan",teamName:"Ryan's Rockets",countries:["Ukraine","Sweden","Paraguay","Egypt","Scotland"],previousRank:null,points:0 },
-        { ownerName:"Lisa",teamName:"Lisa's Lions",countries:["Ivory Coast","Venezuela","Canada","Wales","Ireland"],previousRank:null,points:0 }
-    ];
-
-    const sampleMatches = [
-        { homeTeam:"Brazil",awayTeam:"Portugal",round:"Group",completed:false },
-        { homeTeam:"Argentina",awayTeam:"Germany",round:"Group",completed:false },
-        { homeTeam:"France",awayTeam:"England",round:"Group",completed:false },
-        { homeTeam:"Spain",awayTeam:"Netherlands",round:"Group",completed:false },
-        { homeTeam:"USA",awayTeam:"Mexico",round:"Group",completed:false }
-    ];
-
     try {
-        const b1 = db.batch();
-        allCountries.forEach(c => b1.set(db.collection('countries').doc(), c));
-        await b1.commit();
-
-        const b2 = db.batch();
-        players.forEach(p => b2.set(db.collection('players').doc(), p));
-        await b2.commit();
-
-        const now = new Date();
-        const b3 = db.batch();
-        sampleMatches.forEach((m, i) => {
-            const d = new Date(now); d.setDate(d.getDate() + i + 1); d.setHours(14 + (i % 3) * 3, 0, 0, 0);
-            m.datetime = firebase.firestore.Timestamp.fromDate(d);
-            b3.set(db.collection('matches').doc(), m);
-        });
-        await b3.commit();
-
-        await db.collection('site_settings').doc('metadata').set({
-            tournamentStage: 'Group',
-            lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
-        });
-
-        await recalculateAllPlayerScores(db);
-        status.innerHTML = '<p style="color:var(--green);">Done! Scores auto-calculated.</p>';
-    } catch (err) {
-        status.innerHTML = `<p style="color:var(--red);">Error: ${err.message}</p>`;
-    }
+        var b = db.batch();
+        allCountries.forEach(function(c) { b.set(db.collection('countries').doc(), c); });
+        await b.commit();
+        await db.collection('site_settings').doc('metadata').set({ tournamentStage: 'Group', lastUpdated: firebase.firestore.FieldValue.serverTimestamp() });
+        status.innerHTML = '<p style="color:var(--green);">Done!</p>';
+    } catch (err) { status.innerHTML = '<p style="color:var(--red);">Error: ' + err.message + '</p>'; }
 });
