@@ -11,6 +11,7 @@ let adminMatches = [];
 let adminSettings = {};
 let adminDraftLogs = [];
 let adminDraftSettings = {};
+let adminMessages = [];
 let adminPoolsList = [];
 let currentAdminPoolId = null;
 let adminPoolUnsubscribers = [];
@@ -87,6 +88,7 @@ function switchAdminPool(poolId) {
     adminPlayers = [];
     adminDraftLogs = [];
     adminDraftSettings = {};
+    adminMessages = [];
     attachAdminPoolListeners(poolId);
     renderAdminPoolSelector();
 }
@@ -157,6 +159,12 @@ function attachAdminPoolListeners(poolId) {
         renderDraftBadge();
     });
     adminPoolUnsubscribers.push(ds);
+
+    var ms = poolMessagesRef(db, poolId).orderBy('timestamp', 'desc').limit(100).onSnapshot(function(snap) {
+        adminMessages = snap.docs.map(function(d) { return { id: d.id, ...d.data() }; });
+        renderAdminMessages();
+    });
+    adminPoolUnsubscribers.push(ms);
 }
 
 // ============ MATCHES ============
@@ -567,6 +575,37 @@ document.getElementById('lockDraftBtn').addEventListener('click', async function
         showToast('Draft ' + (isLocked ? 'unlocked' : 'locked') + '.');
     } catch (err) { showToast('Error: ' + err.message, true); }
 });
+
+// ============ MESSAGES (pool-scoped) ============
+
+function renderAdminMessages() {
+    var el = document.getElementById('adminMessagesList');
+    if (!el) return;
+    if (!adminMessages.length) { el.innerHTML = '<p class="empty-state">No messages in this cup.</p>'; return; }
+    el.innerHTML = adminMessages.map(function(m) {
+        var ts = m.timestamp && m.timestamp.toDate ? m.timestamp.toDate() : (m.timestamp ? new Date(m.timestamp) : null);
+        var timeStr = ts ? ts.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+        var escapedName = (m.name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        var escapedMsg = (m.message || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        var escapedNameDisplay = (m.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return '<div class="admin-message-card">' +
+            '<div class="amc-msg-info"><span class="amc-msg-name">' + escapedNameDisplay + '</span>' +
+            '<span class="amc-msg-time">' + timeStr + '</span></div>' +
+            '<div class="amc-msg-text">' + escapedMsg + '</div>' +
+            '<div class="amc-actions"><button class="btn btn-sm btn-danger" onclick="deleteMessage(\'' + m.id + '\')">Delete</button></div></div>';
+    }).join('');
+}
+
+window.deleteMessage = async function(id) {
+    if (!currentAdminPoolId) return;
+    if (!confirm('Delete this message?')) return;
+    try {
+        await poolMessagesRef(db, currentAdminPoolId).doc(id).delete();
+        showToast('Message deleted');
+    } catch (err) {
+        showToast('Error: ' + err.message, true);
+    }
+};
 
 // ============ MIGRATION ============
 
