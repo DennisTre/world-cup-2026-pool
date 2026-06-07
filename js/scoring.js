@@ -96,6 +96,13 @@ function poolDraftSettingsRef(dbRef, poolId) {
 }
 
 /**
+ * Get the Firestore collection reference for a pool's messages.
+ */
+function poolMessagesRef(dbRef, poolId) {
+    return dbRef.collection('pools').doc(poolId).collection('messages');
+}
+
+/**
  * Snapshot current ranks as previousRank, then recalculate points.
  * Pool-aware version.
  */
