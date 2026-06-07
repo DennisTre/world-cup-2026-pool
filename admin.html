@@ -49,6 +49,12 @@
     <!-- ADMIN DASHBOARD -->
     <section class="section" id="adminDashboard" style="display:none;">
         <div class="container">
+            <!-- POOL SELECTOR -->
+            <div class="admin-pool-bar">
+                <span class="admin-pool-label">POOL:</span>
+                <div class="pool-selector" id="adminPoolSelector"></div>
+            </div>
+
             <div class="admin-tabs">
                 <button class="admin-tab active" data-tab="matches">Matches</button>
                 <button class="admin-tab" data-tab="countries">Countries</button>
@@ -207,8 +213,12 @@
                 </form>
                 <div class="admin-note" style="margin-top:16px;" id="settingsLastUpdated"></div>
 
+                <h4>Migrate to Multi-Pool</h4>
+                <p class="admin-note">One-time migration: copies existing players and draft data into Pool A. Safe to run — does not delete original data.</p>
+                <button class="btn btn-primary" id="migrateBtn">Migrate Existing Data to Pool A</button>
+
                 <h4>Seed Sample Data</h4>
-                <p class="admin-note">Load sample data for 10 players. Player points auto-calculate.</p>
+                <p class="admin-note">Load sample countries (shared). Players are added per-pool.</p>
                 <button class="btn btn-outline" id="seedDataBtn">Load Sample Data</button>
                 <div id="seedStatus" style="margin-top:12px;"></div>
             </div>
