@@ -30,8 +30,9 @@ function buildRankedLeaderboard(players, countries) {
     });
     list.sort((a, b) => {
         if (b.calculatedPoints !== a.calculatedPoints) return b.calculatedPoints - a.calculatedPoints;
-        if (b.totalGoalsFor !== a.totalGoalsFor) return b.totalGoalsFor - a.totalGoalsFor;
-        return a.totalGoalsAgainst - b.totalGoalsAgainst;
+        const gdA = a.totalGoalsFor - a.totalGoalsAgainst, gdB = b.totalGoalsFor - b.totalGoalsAgainst;
+        if (gdB !== gdA) return gdB - gdA;
+        return b.totalGoalsFor - a.totalGoalsFor;
     });
     list.forEach((p, i) => { p.rank = i + 1; });
     return list;
