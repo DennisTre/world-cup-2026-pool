@@ -8,7 +8,6 @@ let playersData = [];
 let rankedPlayers = [];
 let countriesData = [];
 let matchesData = [];
-let activityData = [];
 let messagesData = [];
 let siteSettings = {};
 let draftSettings = {};
@@ -75,12 +74,8 @@ function initSharedListeners() {
     db.collection('matches').orderBy('datetime', 'asc').onSnapshot(snap => {
         matchesData = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         renderMatches();
+        renderResults();
         renderH2H();
-    });
-
-    db.collection('activity_feed').orderBy('timestamp', 'desc').limit(30).onSnapshot(snap => {
-        activityData = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        renderActivity();
     });
 
     db.collection('site_settings').doc('metadata').onSnapshot(doc => {
@@ -259,17 +254,30 @@ function renderRace() {
     }).join('');
 }
 
-// ---- ACTIVITY FEED ----
-function renderActivity() {
-    const feed = document.getElementById('activityFeed');
-    if (!feed) return;
-    if (!activityData.length) { feed.innerHTML = '<p class="empty-state">No recent activity yet.</p>'; return; }
-    feed.innerHTML = activityData.map(a => {
-        const time = a.timestamp ? formatTime(a.timestamp) : '';
-        return '<div class="activity-item"><span class="activity-flag">' + getFlag(a.country) + '</span>' +
-            '<span class="activity-text"><strong>' + a.country + '</strong> — ' + (a.description || '') + '</span>' +
-            '<span class="activity-points">+' + (a.points || 0) + '</span>' +
-            '<span class="activity-time">' + time + '</span></div>';
+// ---- MATCH RESULTS ----
+function renderResults() {
+    var el = document.getElementById('resultsList');
+    if (!el) return;
+    var completed = matchesData.filter(function(m) { return m.completed; });
+    completed.sort(function(a, b) {
+        var da = a.datetime && a.datetime.toDate ? a.datetime.toDate() : new Date(a.datetime);
+        var db2 = b.datetime && b.datetime.toDate ? b.datetime.toDate() : new Date(b.datetime);
+        return db2 - da;
+    });
+    if (!completed.length) { el.innerHTML = '<p class="empty-state">No match results yet.</p>'; return; }
+    el.innerHTML = completed.map(function(m) {
+        var dt = m.datetime && m.datetime.toDate ? m.datetime.toDate() : new Date(m.datetime);
+        var day = dt.getDate();
+        var mon = dt.toLocaleString('en', { month: 'short' }).toUpperCase();
+        return '<div class="result-card">' +
+            '<div class="result-date"><div class="result-date-day">' + day + '</div><div class="result-date-month">' + mon + '</div></div>' +
+            '<div class="result-divider"></div>' +
+            '<div class="result-teams">' +
+            '<div class="result-team"><span class="flag">' + getFlag(m.homeTeam) + '</span><span class="result-team-name">' + m.homeTeam + '</span></div>' +
+            '<div class="result-score">' + m.homeScore + ' - ' + m.awayScore + '</div>' +
+            '<div class="result-team result-team-away"><span class="flag">' + getFlag(m.awayTeam) + '</span><span class="result-team-name">' + m.awayTeam + '</span></div>' +
+            '</div>' +
+            '<div class="result-round">' + (STAGE_NAMES[m.round] || m.round || 'Group') + '</div></div>';
     }).join('');
 }
 
