@@ -20,11 +20,19 @@ function calculatePlayerPoints(player, countries) {
  * Build a ranked leaderboard from raw player and country data.
  */
 function buildRankedLeaderboard(players, countries) {
-    const list = players.map(p => ({
-        ...p,
-        calculatedPoints: calculatePlayerPoints(p, countries)
-    }));
-    list.sort((a, b) => b.calculatedPoints - a.calculatedPoints);
+    const list = players.map(p => {
+        let totalGF = 0, totalGA = 0;
+        (p.countries || []).forEach(name => {
+            const c = countries.find(x => x.name === name);
+            if (c) { totalGF += (c.goalsFor || 0); totalGA += (c.goalsAgainst || 0); }
+        });
+        return { ...p, calculatedPoints: calculatePlayerPoints(p, countries), totalGoalsFor: totalGF, totalGoalsAgainst: totalGA };
+    });
+    list.sort((a, b) => {
+        if (b.calculatedPoints !== a.calculatedPoints) return b.calculatedPoints - a.calculatedPoints;
+        if (b.totalGoalsFor !== a.totalGoalsFor) return b.totalGoalsFor - a.totalGoalsFor;
+        return a.totalGoalsAgainst - b.totalGoalsAgainst;
+    });
     list.forEach((p, i) => { p.rank = i + 1; });
     return list;
 }
