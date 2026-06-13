@@ -62,6 +62,15 @@ function rebuildLeaderboard() {
     renderAlive();
     renderRace();
     renderH2H();
+    renderMatches();
+    renderResults();
+}
+
+function getCountryOwner(countryName) {
+    for (var i = 0; i < rankedPlayers.length; i++) {
+        if ((rankedPlayers[i].countries || []).indexOf(countryName) !== -1) return rankedPlayers[i].ownerName;
+    }
+    return '';
 }
 
 // ---- SHARED LISTENERS (run once) ----
@@ -269,13 +278,15 @@ function renderResults() {
         var dt = m.datetime && m.datetime.toDate ? m.datetime.toDate() : new Date(m.datetime);
         var day = dt.getDate();
         var mon = dt.toLocaleString('en', { month: 'short' }).toUpperCase();
+        var homeOwner = getCountryOwner(m.homeTeam);
+        var awayOwner = getCountryOwner(m.awayTeam);
         return '<div class="result-card">' +
             '<div class="result-date"><div class="result-date-day">' + day + '</div><div class="result-date-month">' + mon + '</div></div>' +
             '<div class="result-divider"></div>' +
             '<div class="result-teams">' +
-            '<div class="result-team"><span class="flag">' + getFlag(m.homeTeam) + '</span><span class="result-team-name">' + m.homeTeam + '</span></div>' +
+            '<div class="result-team"><span class="flag">' + getFlag(m.homeTeam) + '</span><div class="result-team-info"><span class="result-team-name">' + m.homeTeam + '</span>' + (homeOwner ? '<span class="result-owner">' + homeOwner + '</span>' : '') + '</div></div>' +
             '<div class="result-score">' + m.homeScore + ' - ' + m.awayScore + '</div>' +
-            '<div class="result-team result-team-away"><span class="flag">' + getFlag(m.awayTeam) + '</span><span class="result-team-name">' + m.awayTeam + '</span></div>' +
+            '<div class="result-team result-team-away"><span class="flag">' + getFlag(m.awayTeam) + '</span><div class="result-team-info"><span class="result-team-name">' + m.awayTeam + '</span>' + (awayOwner ? '<span class="result-owner">' + awayOwner + '</span>' : '') + '</div></div>' +
             '</div>' +
             '<div class="result-round">' + (STAGE_NAMES[m.round] || m.round || 'Group') + '</div></div>';
     }).join('');
@@ -309,12 +320,14 @@ function renderMatches() {
         var day = dt.getDate();
         var mon = dt.toLocaleString('en', { month: 'short' }).toUpperCase();
         var time = dt.toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' });
+        var homeOwner = getCountryOwner(m.homeTeam);
+        var awayOwner = getCountryOwner(m.awayTeam);
         return '<div class="match-card">' +
             '<div class="match-date"><div class="match-date-day">' + day + '</div><div class="match-date-month">' + mon + '</div></div>' +
             '<div class="match-divider"></div>' +
-            '<div class="match-teams"><div class="match-team"><span class="flag">' + getFlag(m.homeTeam) + '</span><span class="match-team-name">' + m.homeTeam + '</span></div>' +
+            '<div class="match-teams"><div class="match-team"><span class="flag">' + getFlag(m.homeTeam) + '</span><div class="match-team-info"><span class="match-team-name">' + m.homeTeam + '</span>' + (homeOwner ? '<span class="match-owner">' + homeOwner + '</span>' : '') + '</div></div>' +
             '<span class="match-vs">VS</span>' +
-            '<div class="match-team match-team-away"><span class="flag">' + getFlag(m.awayTeam) + '</span><span class="match-team-name">' + m.awayTeam + '</span></div></div>' +
+            '<div class="match-team match-team-away"><span class="flag">' + getFlag(m.awayTeam) + '</span><div class="match-team-info"><span class="match-team-name">' + m.awayTeam + '</span>' + (awayOwner ? '<span class="match-owner">' + awayOwner + '</span>' : '') + '</div></div></div>' +
             '<div><div class="match-time">' + time + '</div><div class="match-round">' + (m.round || 'Group') + '</div></div></div>';
     }).join('');
 }
