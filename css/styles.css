@@ -256,7 +256,9 @@ body {
 .result-teams { flex: 1; display: flex; flex-direction: column; gap: 4px; }
 .result-team { display: flex; align-items: center; gap: 6px; }
 .result-team .flag { font-size: 1.2rem; }
+.result-team-info { display: flex; flex-direction: column; }
 .result-team-name { font-family: var(--font-display); font-weight: 600; font-size: 0.8rem; }
+.result-owner { font-size: 0.65rem; color: var(--gold); font-weight: 600; letter-spacing: 0.5px; }
 .result-team-away { /* same direction on mobile */ }
 .result-score {
     font-family: var(--font-display); font-weight: 700; font-size: 1rem;
@@ -279,7 +281,9 @@ body {
 .match-teams { flex: 1; display: flex; flex-direction: column; gap: 4px; }
 .match-team { display: flex; align-items: center; gap: 6px; }
 .match-team .flag { font-size: 1.2rem; }
+.match-team-info { display: flex; flex-direction: column; }
 .match-team-name { font-family: var(--font-display); font-weight: 600; font-size: 0.8rem; }
+.match-owner { font-size: 0.65rem; color: var(--gold); font-weight: 600; letter-spacing: 0.5px; }
 .match-team-away { /* same direction on mobile */ }
 .match-vs { display: none; } /* hidden on mobile */
 .match-time { font-size: 0.75rem; color: var(--text-secondary); text-align: right; }
