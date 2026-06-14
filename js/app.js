@@ -264,6 +264,9 @@ function renderRace() {
 }
 
 // ---- MATCH RESULTS ----
+var resultsShowAll = false;
+var RESULTS_INITIAL = 6;
+
 function renderResults() {
     var el = document.getElementById('resultsList');
     if (!el) return;
@@ -274,7 +277,8 @@ function renderResults() {
         return db2 - da;
     });
     if (!completed.length) { el.innerHTML = '<p class="empty-state">No match results yet.</p>'; return; }
-    el.innerHTML = completed.map(function(m) {
+    var visible = resultsShowAll ? completed : completed.slice(0, RESULTS_INITIAL);
+    var html = visible.map(function(m) {
         var dt = m.datetime && m.datetime.toDate ? m.datetime.toDate() : new Date(m.datetime);
         var day = dt.getDate();
         var mon = dt.toLocaleString('en', { month: 'short' }).toUpperCase();
@@ -290,6 +294,16 @@ function renderResults() {
             '</div>' +
             '<div class="result-round">' + (STAGE_NAMES[m.round] || m.round || 'Group') + '</div></div>';
     }).join('');
+    if (!resultsShowAll && completed.length > RESULTS_INITIAL) {
+        html += '<button class="btn btn-outline btn-full show-more-btn" id="resultsShowMoreBtn">Show More (' + (completed.length - RESULTS_INITIAL) + ')</button>';
+    } else if (resultsShowAll && completed.length > RESULTS_INITIAL) {
+        html += '<button class="btn btn-outline btn-full show-more-btn" id="resultsShowLessBtn">Show Less</button>';
+    }
+    el.innerHTML = html;
+    var moreBtn = document.getElementById('resultsShowMoreBtn');
+    if (moreBtn) moreBtn.addEventListener('click', function() { resultsShowAll = true; renderResults(); });
+    var lessBtn = document.getElementById('resultsShowLessBtn');
+    if (lessBtn) lessBtn.addEventListener('click', function() { resultsShowAll = false; renderResults(); });
 }
 
 function formatTime(ts) {
@@ -427,11 +441,15 @@ async function postMessage() {
     sendBtn.disabled = false;
 }
 
+var mbShowAll = false;
+var MB_INITIAL = 4;
+
 function renderMessages() {
     var feed = document.getElementById('mbFeed');
     if (!feed) return;
     if (!messagesData.length) { feed.innerHTML = '<p class="empty-state">No messages yet. Be the first to post!</p>'; return; }
-    feed.innerHTML = messagesData.map(function(m) {
+    var visible = mbShowAll ? messagesData : messagesData.slice(0, MB_INITIAL);
+    var html = visible.map(function(m) {
         var time = m.timestamp ? formatTime(m.timestamp) : '';
         var initial = (m.name || '?').charAt(0).toUpperCase();
         return '<div class="mb-message">' +
@@ -441,6 +459,16 @@ function renderMessages() {
             '<div class="mb-text">' + escapeHtml(m.message) + '</div>' +
             '</div></div>';
     }).join('');
+    if (!mbShowAll && messagesData.length > MB_INITIAL) {
+        html += '<button class="btn btn-outline btn-full show-more-btn" id="mbShowMoreBtn">Show More (' + (messagesData.length - MB_INITIAL) + ')</button>';
+    } else if (mbShowAll && messagesData.length > MB_INITIAL) {
+        html += '<button class="btn btn-outline btn-full show-more-btn" id="mbShowLessBtn">Show Less</button>';
+    }
+    feed.innerHTML = html;
+    var moreBtn = document.getElementById('mbShowMoreBtn');
+    if (moreBtn) moreBtn.addEventListener('click', function() { mbShowAll = true; renderMessages(); });
+    var lessBtn = document.getElementById('mbShowLessBtn');
+    if (lessBtn) lessBtn.addEventListener('click', function() { mbShowAll = false; renderMessages(); });
 }
 
 function escapeHtml(str) {
