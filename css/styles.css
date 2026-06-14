@@ -346,7 +346,8 @@ body {
 .mb-message-input { flex: 1; min-width: 0; }
 .mb-send-btn { flex-shrink: 0; padding: 12px 20px; }
 
-.mb-feed { display: flex; flex-direction: column; gap: 8px; max-height: 400px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.mb-feed { display: flex; flex-direction: column; gap: 8px; }
+.show-more-btn { margin-top: 8px; }
 
 .mb-message {
     display: flex; gap: 10px; padding: 12px;
@@ -463,7 +464,6 @@ body {
     .points-grid { grid-template-columns: repeat(2, 1fr); gap: 24px; }
 
     .mb-name-input { width: 160px; }
-    .mb-feed { max-height: 500px; }
 
     .tiers-grid { gap: 20px; }
     .tier-card { padding: 24px; }
