@@ -57,7 +57,6 @@ function rebuildLeaderboard() {
     rankedPlayers = buildRankedLeaderboard(playersData, countriesData);
     renderHero();
     renderSummary();
-    renderLeaderboard();
     renderPlayerCards();
     renderAlive();
     renderRace();
@@ -205,17 +204,24 @@ function isEliminated(name) {
     return c && c.eliminated === true;
 }
 
-// ---- PLAYER CARDS ----
+// ---- PLAYER CARDS (STANDINGS) ----
+function getCountryRecord(name) {
+    var c = countriesData.find(function(x) { return x.name === name; });
+    if (!c) return '';
+    return (c.wins || 0) + '-' + (c.losses || 0) + '-' + (c.draws || 0);
+}
+
 function renderPlayerCards() {
     const grid = document.getElementById('playerCardsGrid');
     if (!grid) return;
     grid.innerHTML = rankedPlayers.map(p => {
-        const topClass = p.rank === 1 ? 'top-1' : '';
+        const rankClass = p.rank <= 3 ? 'rank-' + p.rank : '';
         const countries = (p.countries || []).map(c => {
             const elim = isEliminated(c);
-            return '<span class="card-country-tag ' + (elim ? 'eliminated' : '') + '"><span class="flag">' + getFlag(c) + '</span> ' + c + '</span>';
+            const record = getCountryRecord(c);
+            return '<span class="card-country-tag ' + (elim ? 'eliminated' : '') + '"><span class="flag">' + getFlag(c) + '</span><span class="card-country-info"><span class="card-country-name">' + c + '</span><span class="card-country-record">' + record + '</span></span></span>';
         }).join('');
-        return '<div class="player-card ' + topClass + '"><span class="card-rank">#' + p.rank + '</span>' +
+        return '<div class="player-card ' + rankClass + '"><span class="card-rank-badge ' + rankClass + '">' + p.rank + '</span>' +
             '<div class="card-team-name">' + (p.teamName || '—') + '</div>' +
             '<div class="card-owner">' + (p.ownerName || '—') + '</div>' +
             '<div class="card-points">' + p.calculatedPoints + '</div>' +
@@ -325,24 +331,31 @@ function renderMatches() {
     var now = new Date();
     var upcoming = matchesData.filter(function(m) {
         if (m.completed) return false;
-        var dt = m.datetime && m.datetime.toDate ? m.datetime.toDate() : new Date(m.datetime);
-        return dt >= now;
-    }).slice(0, 10);
+        return true;
+    });
+    upcoming.sort(function(a, b) {
+        var da = a.datetime && a.datetime.toDate ? a.datetime.toDate() : new Date(a.datetime);
+        var db2 = b.datetime && b.datetime.toDate ? b.datetime.toDate() : new Date(b.datetime);
+        return da - db2;
+    });
     if (!upcoming.length) { list.innerHTML = '<p class="empty-state">No upcoming matches scheduled.</p>'; return; }
-    list.innerHTML = upcoming.map(function(m) {
+    list.innerHTML = upcoming.slice(0, 15).map(function(m) {
         var dt = m.datetime && m.datetime.toDate ? m.datetime.toDate() : new Date(m.datetime);
         var day = dt.getDate();
         var mon = dt.toLocaleString('en', { month: 'short' }).toUpperCase();
         var time = dt.toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' });
         var homeOwner = getCountryOwner(m.homeTeam);
         var awayOwner = getCountryOwner(m.awayTeam);
-        return '<div class="match-card">' +
+        var isLive = dt <= now;
+        var timeDisplay = isLive ? '<span class="match-live">IN PROGRESS</span>' : '<div class="match-time">' + time + '</div>';
+        var cardClass = isLive ? 'match-card match-card-live' : 'match-card';
+        return '<div class="' + cardClass + '">' +
             '<div class="match-date"><div class="match-date-day">' + day + '</div><div class="match-date-month">' + mon + '</div></div>' +
             '<div class="match-divider"></div>' +
             '<div class="match-teams"><div class="match-team"><span class="flag">' + getFlag(m.homeTeam) + '</span><div class="match-team-info"><span class="match-team-name">' + m.homeTeam + '</span>' + (homeOwner ? '<span class="match-owner">' + homeOwner + '</span>' : '') + '</div></div>' +
             '<span class="match-vs">VS</span>' +
             '<div class="match-team match-team-away"><span class="flag">' + getFlag(m.awayTeam) + '</span><div class="match-team-info"><span class="match-team-name">' + m.awayTeam + '</span>' + (awayOwner ? '<span class="match-owner">' + awayOwner + '</span>' : '') + '</div></div></div>' +
-            '<div><div class="match-time">' + time + '</div><div class="match-round">' + (m.round || 'Group') + '</div></div></div>';
+            '<div>' + timeDisplay + '<div class="match-round">' + (m.round || 'Group') + '</div></div></div>';
     }).join('');
 }
 
