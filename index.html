@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>World Cup 2026 Pool</title>
-    <link rel="stylesheet" href="css/styles.css?v=2">
+    <link rel="stylesheet" href="css/styles.css?v=3">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <meta name="theme-color" content="#0a0e1a">
@@ -25,7 +25,6 @@
                 <ul class="nav-links">
                     <li><a href="#messageBoard">Board</a></li>
                     <li><a href="#leaderboard">Standings</a></li>
-                    <li><a href="#players">Players</a></li>
                     <li><a href="#alive">Alive</a></li>
                     <li><a href="#h2h">H2H</a></li>
                     <li><a href="#matches">Matches</a></li>
@@ -110,39 +109,11 @@
         </div>
     </section>
 
-    <!-- LEADERBOARD -->
-    <section class="section leaderboard-section" id="leaderboard">
+    <!-- STANDINGS -->
+    <section class="section players-section" id="leaderboard">
         <div class="container">
             <div class="section-header">
-                <h2 class="section-title">LEADERBOARD</h2>
-                <div class="section-line"></div>
-            </div>
-            <!-- Mobile: card-based leaderboard -->
-            <div class="leaderboard-cards" id="leaderboardCards"></div>
-            <!-- Desktop: table leaderboard -->
-            <div class="leaderboard-table-wrap">
-                <table class="leaderboard-table" id="leaderboardTable">
-                    <thead>
-                        <tr>
-                            <th class="col-rank">#</th>
-                            <th class="col-movement"></th>
-                            <th class="col-team">TEAM</th>
-                            <th class="col-owner">OWNER</th>
-                            <th class="col-countries">COUNTRIES</th>
-                            <th class="col-points">PTS</th>
-                        </tr>
-                    </thead>
-                    <tbody id="leaderboardBody"></tbody>
-                </table>
-            </div>
-        </div>
-    </section>
-
-    <!-- PLAYER CARDS -->
-    <section class="section players-section" id="players">
-        <div class="container">
-            <div class="section-header">
-                <h2 class="section-title">PLAYER CARDS</h2>
+                <h2 class="section-title">STANDINGS</h2>
                 <div class="section-line"></div>
             </div>
             <div class="player-cards-grid" id="playerCardsGrid"></div>
@@ -343,9 +314,9 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 
-    <script src="js/firebase-config.js?v=2"></script>
-    <script src="js/flags.js?v=2"></script>
-    <script src="js/scoring.js?v=2"></script>
-    <script src="js/app.js?v=2"></script>
+    <script src="js/firebase-config.js?v=3"></script>
+    <script src="js/flags.js?v=3"></script>
+    <script src="js/scoring.js?v=3"></script>
+    <script src="js/app.js?v=3"></script>
 </body>
 </html>
