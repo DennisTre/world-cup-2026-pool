@@ -208,16 +208,31 @@ body {
     padding: 20px; position: relative; overflow: hidden;
 }
 .player-card.top-1 { border-color: var(--gold-dark); box-shadow: 0 0 16px rgba(212,168,67,0.12); }
-.player-card .card-rank { position: absolute; top: 12px; right: 14px; font-family: var(--font-display); font-size: 1.6rem; font-weight: 700; color: var(--border-light); line-height: 1; }
-.player-card.top-1 .card-rank { color: var(--gold-dark); }
+.card-rank-badge {
+    position: absolute; top: 12px; right: 14px;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; border-radius: 50%;
+    font-family: var(--font-display); font-size: 1rem; font-weight: 700;
+    color: var(--text-muted); background: var(--bg-surface); border: 2px solid var(--border);
+}
+.card-rank-badge.rank-1 { background: linear-gradient(135deg, var(--gold), var(--gold-light)); color: #1a1a1a; border-color: var(--gold); box-shadow: 0 0 12px rgba(212,168,67,0.4); }
+.card-rank-badge.rank-2 { background: linear-gradient(135deg, #8a93a8, #c0c7d6); color: #1a1a1a; border-color: var(--silver); }
+.card-rank-badge.rank-3 { background: linear-gradient(135deg, var(--bronze), #e0a060); color: #1a1a1a; border-color: var(--bronze); }
+.player-card.rank-1 { border-color: var(--gold-dark); box-shadow: 0 0 16px rgba(212,168,67,0.12); }
+.player-card.rank-2 { border-color: var(--silver); }
+.player-card.rank-3 { border-color: var(--bronze); }
 .card-team-name { font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; color: var(--white); letter-spacing: 0.5px; margin-bottom: 2px; }
 .card-owner { font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 12px; }
 .card-points { font-family: var(--font-display); font-size: 1.6rem; font-weight: 700; color: var(--gold); line-height: 1; }
 .card-points-label { font-size: 0.6rem; color: var(--text-muted); letter-spacing: 2px; margin-bottom: 12px; display: block; }
 .card-countries { display: flex; gap: 6px; flex-wrap: wrap; }
-.card-country-tag { display: flex; align-items: center; gap: 4px; background: var(--bg-surface); padding: 4px 10px; border-radius: 20px; font-size: 0.7rem; color: var(--text-secondary); border: 1px solid var(--border); }
-.card-country-tag .flag { font-size: 0.85rem; }
-.card-country-tag.eliminated { opacity: 0.35; text-decoration: line-through; }
+.card-country-tag { display: flex; align-items: center; gap: 6px; background: var(--bg-surface); padding: 6px 10px; border-radius: var(--radius); font-size: 0.7rem; color: var(--text-secondary); border: 1px solid var(--border); }
+.card-country-tag .flag { font-size: 1rem; }
+.card-country-info { display: flex; flex-direction: column; line-height: 1.2; }
+.card-country-name { font-weight: 500; }
+.card-country-record { font-size: 0.6rem; color: var(--text-muted); letter-spacing: 0.5px; }
+.card-country-tag.eliminated { opacity: 0.35; }
+.card-country-tag.eliminated .card-country-name { text-decoration: line-through; }
 
 /* ---- COUNTRIES ALIVE ---- */
 .alive-section { background: var(--bg-primary); }
@@ -286,6 +301,13 @@ body {
 .match-owner { font-size: 0.65rem; color: var(--gold); font-weight: 600; letter-spacing: 0.5px; }
 .match-team-away { /* same direction on mobile */ }
 .match-vs { display: none; } /* hidden on mobile */
+.match-card-live { border-left: 3px solid var(--green); }
+.match-live {
+    font-family: var(--font-display); font-size: 0.7rem; font-weight: 700;
+    color: var(--green); letter-spacing: 1px; text-align: right;
+    animation: livePulse 2s ease-in-out infinite;
+}
+@keyframes livePulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 .match-time { font-size: 0.75rem; color: var(--text-secondary); text-align: right; }
 .match-round { font-size: 0.6rem; color: var(--text-muted); letter-spacing: 1px; text-transform: uppercase; text-align: right; }
 
