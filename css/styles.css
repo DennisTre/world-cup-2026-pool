@@ -215,7 +215,7 @@ body {
     font-family: var(--font-display); font-size: 1rem; font-weight: 700;
     color: var(--text-muted); background: var(--bg-surface); border: 2px solid var(--border);
 }
-.card-rank-badge.rank-1 { background: linear-gradient(135deg, var(--gold), var(--gold-light)); color: #1a1a1a; border-color: var(--gold); box-shadow: 0 0 12px rgba(212,168,67,0.4); }
+.card-rank-badge.rank-1 { background: linear-gradient(135deg, var(--gold), var(--gold-light)); color: var(--white); border-color: var(--gold); box-shadow: 0 0 12px rgba(212,168,67,0.4); }
 .card-rank-badge.rank-2 { background: linear-gradient(135deg, #8a93a8, #c0c7d6); color: #1a1a1a; border-color: var(--silver); }
 .card-rank-badge.rank-3 { background: linear-gradient(135deg, var(--bronze), #e0a060); color: #1a1a1a; border-color: var(--bronze); }
 .player-card.rank-1 { border-color: var(--gold-dark); box-shadow: 0 0 16px rgba(212,168,67,0.12); }
