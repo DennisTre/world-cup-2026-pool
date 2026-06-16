@@ -224,6 +224,7 @@ function renderPlayerCards() {
             '<div class="card-owner">' + (p.ownerName || '—') + '</div>' +
             '<div class="card-points">' + p.calculatedPoints + '</div>' +
             '<span class="card-points-label">POINTS</span>' +
+            '<span class="card-gd">GD: ' + ((p.totalGoalsFor - p.totalGoalsAgainst) >= 0 ? '+' : '') + (p.totalGoalsFor - p.totalGoalsAgainst) + '</span>' +
             '<div class="card-countries">' + countries + '</div></div>';
     }).join('');
 }
