@@ -247,9 +247,7 @@ function renderPlayerCards() {
             '<div class="card-points">' + p.calculatedPoints + '</div>' +
             '<span class="card-points-label">POINTS</span>' +
             '<div class="card-stats">' +
-            '<div class="card-stat"><span class="card-stat-label">BEST</span><span class="card-stat-value">' + getFlag(stats.bestCountry) + ' ' + stats.bestCountry + ' <span class="card-stat-pts">' + stats.bestPts + 'pts</span></span></div>' +
-            '<div class="card-stat"><span class="card-stat-label">WORST</span><span class="card-stat-value">' + getFlag(stats.worstCountry) + ' ' + stats.worstCountry + ' <span class="card-stat-pts">' + stats.worstPts + 'pts</span></span></div>' +
-            '<div class="card-stat"><span class="card-stat-label">GD</span><span class="card-stat-value card-stat-gd">' + stats.gd + '</span></div>' +
+            '<div class="card-stat card-stat-gd-cell"><span class="card-stat-label">GOAL DIFF</span><span class="card-stat-value card-stat-gd">' + stats.gd + '</span></div>' +
             '</div>' +
             '<div class="card-countries">' + countries + '</div></div>';
     }).join('');
