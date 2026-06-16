@@ -225,13 +225,6 @@ body {
 .card-owner { font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 12px; }
 .card-points { font-family: var(--font-display); font-size: 1.6rem; font-weight: 700; color: var(--gold); line-height: 1; }
 .card-points-label { font-size: 0.6rem; color: var(--text-muted); letter-spacing: 2px; margin-bottom: 12px; display: block; }
-.card-stats { display: flex; gap: 8px; margin-bottom: 12px; width: 100%; }
-.card-stat { flex: 1; background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 8px; text-align: center; }
-.card-stat-label { display: block; font-size: 0.55rem; letter-spacing: 1.5px; color: var(--text-muted); margin-bottom: 2px; }
-.card-stat-value { font-size: 0.7rem; color: var(--text-primary); }
-.card-stat-value .flag { font-size: 0.85rem; }
-.card-stat-pts { color: var(--gold); font-weight: 600; font-size: 0.65rem; }
-.card-stat-gd { font-family: var(--font-display); font-size: 1rem; font-weight: 700; color: var(--accent); }
 .card-countries { display: flex; gap: 6px; flex-wrap: wrap; }
 .card-country-tag { display: flex; align-items: center; gap: 6px; background: var(--bg-surface); padding: 6px 10px; border-radius: var(--radius); font-size: 0.7rem; color: var(--text-secondary); border: 1px solid var(--border); }
 .card-country-tag .flag { font-size: 1rem; }
