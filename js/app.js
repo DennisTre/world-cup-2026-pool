@@ -209,27 +209,6 @@ function getCountryRecord(name) {
     return (c.wins || 0) + '-' + (c.losses || 0) + '-' + (c.draws || 0);
 }
 
-function getPlayerStats(player) {
-    var best = null, worst = null, gf = 0, ga = 0;
-    (player.countries || []).forEach(function(name) {
-        var c = countriesData.find(function(x) { return x.name === name; });
-        if (!c) return;
-        var pts = c.poolPoints || 0;
-        gf += (c.goalsFor || 0);
-        ga += (c.goalsAgainst || 0);
-        if (best === null || pts > best.pts) best = { name: name, pts: pts };
-        if (worst === null || pts < worst.pts) worst = { name: name, pts: pts };
-    });
-    var gd = gf - ga;
-    return {
-        bestCountry: best ? best.name : '—',
-        bestPts: best ? best.pts : 0,
-        worstCountry: worst ? worst.name : '—',
-        worstPts: worst ? worst.pts : 0,
-        gd: (gd >= 0 ? '+' : '') + gd
-    };
-}
-
 function renderPlayerCards() {
     const grid = document.getElementById('playerCardsGrid');
     if (!grid) return;
@@ -240,15 +219,11 @@ function renderPlayerCards() {
             const record = getCountryRecord(c);
             return '<span class="card-country-tag ' + (elim ? 'eliminated' : '') + '"><span class="flag">' + getFlag(c) + '</span><span class="card-country-info"><span class="card-country-name">' + c + '</span><span class="card-country-record">' + record + '</span></span></span>';
         }).join('');
-        var stats = getPlayerStats(p);
         return '<div class="player-card ' + rankClass + '"><span class="card-rank-badge ' + rankClass + '">' + p.rank + '</span>' +
             '<div class="card-team-name">' + (p.teamName || '—') + '</div>' +
             '<div class="card-owner">' + (p.ownerName || '—') + '</div>' +
             '<div class="card-points">' + p.calculatedPoints + '</div>' +
             '<span class="card-points-label">POINTS</span>' +
-            '<div class="card-stats">' +
-            '<div class="card-stat card-stat-gd-cell"><span class="card-stat-label">GOAL DIFF</span><span class="card-stat-value card-stat-gd">' + stats.gd + '</span></div>' +
-            '</div>' +
             '<div class="card-countries">' + countries + '</div></div>';
     }).join('');
 }
