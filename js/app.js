@@ -60,7 +60,6 @@ function rebuildLeaderboard() {
     renderPlayerCards();
     renderAlive();
     renderRace();
-    renderH2H();
     renderMatches();
     renderResults();
 }
@@ -83,7 +82,6 @@ function initSharedListeners() {
         matchesData = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         renderMatches();
         renderResults();
-        renderH2H();
     });
 
     db.collection('site_settings').doc('metadata').onSnapshot(doc => {
