@@ -183,14 +183,18 @@ async function recalculateAllPlayerScores(dbRef) { await recalculateAllPoolScore
  * Process a completed match result automatically.
  * Updates both countries, creates activity entries, recalculates ALL pools.
  */
-async function processMatchResult(dbRef, homeTeam, awayTeam, homeScore, awayScore, countriesList) {
+async function processMatchResult(dbRef, homeTeam, awayTeam, homeScore, awayScore, countriesList, round) {
+    var isGroupStage = !round || round === 'Group';
     let homeResult, awayResult, homePts, awayPts;
     if (homeScore > awayScore) {
-        homeResult = 'win'; awayResult = 'loss'; homePts = 2; awayPts = 0;
+        homeResult = 'win'; awayResult = 'loss';
+        homePts = isGroupStage ? 2 : 0; awayPts = 0;
     } else if (homeScore < awayScore) {
-        homeResult = 'loss'; awayResult = 'win'; homePts = 0; awayPts = 2;
+        homeResult = 'loss'; awayResult = 'win';
+        homePts = 0; awayPts = isGroupStage ? 2 : 0;
     } else {
-        homeResult = 'draw'; awayResult = 'draw'; homePts = 1; awayPts = 1;
+        homeResult = 'draw'; awayResult = 'draw';
+        homePts = isGroupStage ? 1 : 0; awayPts = isGroupStage ? 1 : 0;
     }
 
     // Snapshot ranks for ALL pools before changes
