@@ -229,7 +229,7 @@ document.getElementById('matchForm').addEventListener('submit', async function(e
         if (id) { await db.collection('matches').doc(id).update(data); }
         else { await db.collection('matches').add(data); }
         if (isNewCompletion) {
-            await processMatchResult(db, homeTeam, awayTeam, homeScore, awayScore, adminCountries);
+            await processMatchResult(db, homeTeam, awayTeam, homeScore, awayScore, adminCountries, data.round);
             showToast('Match completed! All pools updated.');
         } else { updateLastUpdated(db); showToast('Match saved'); }
         clearMatchFormFn();
