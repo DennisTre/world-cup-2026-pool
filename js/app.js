@@ -224,7 +224,18 @@ function getCountryRoundsReached(countryName) {
 function getCountryPointsBreakdown(countryName) {
     var c = countriesData.find(function(x) { return x.name === countryName; });
     if (!c) return { pool: 0, knockout: 0 };
-    var poolPts = ((c.wins || 0) * 2) + ((c.draws || 0) * 1);
+    var groupWins = 0, groupDraws = 0;
+    matchesData.forEach(function(m) {
+        if (!m.completed || m.round !== 'Group') return;
+        if (m.homeTeam === countryName) {
+            if (m.homeScore > m.awayScore) groupWins++;
+            else if (m.homeScore === m.awayScore) groupDraws++;
+        } else if (m.awayTeam === countryName) {
+            if (m.awayScore > m.homeScore) groupWins++;
+            else if (m.awayScore === m.homeScore) groupDraws++;
+        }
+    });
+    var poolPts = (groupWins * 2) + (groupDraws * 1);
     var knockoutPts = (c.poolPoints || 0) - poolPts;
     return { pool: poolPts, knockout: knockoutPts };
 }
