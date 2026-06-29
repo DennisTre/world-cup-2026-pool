@@ -209,6 +209,26 @@ function getCountryRecord(name) {
     return (c.wins || 0) + '-' + (c.losses || 0) + '-' + (c.draws || 0);
 }
 
+function getCountryRoundsReached(countryName) {
+    var knockoutRounds = ['R32', 'R16', 'QF', 'SF', 'F'];
+    var reached = [];
+    knockoutRounds.forEach(function(round) {
+        var hasMatch = matchesData.some(function(m) {
+            return m.completed && m.round === round && (m.homeTeam === countryName || m.awayTeam === countryName);
+        });
+        if (hasMatch) reached.push(round);
+    });
+    return reached;
+}
+
+function getCountryPointsBreakdown(countryName) {
+    var c = countriesData.find(function(x) { return x.name === countryName; });
+    if (!c) return { pool: 0, knockout: 0 };
+    var poolPts = ((c.wins || 0) * 2) + ((c.draws || 0) * 1);
+    var knockoutPts = (c.poolPoints || 0) - poolPts;
+    return { pool: poolPts, knockout: knockoutPts };
+}
+
 function renderPlayerCards() {
     const grid = document.getElementById('playerCardsGrid');
     if (!grid) return;
@@ -217,7 +237,11 @@ function renderPlayerCards() {
         const countries = (p.countries || []).map(c => {
             const elim = isEliminated(c);
             const record = getCountryRecord(c);
-            return '<span class="card-country-tag ' + (elim ? 'eliminated' : '') + '"><span class="flag">' + getFlag(c) + '</span><span class="card-country-info"><span class="card-country-name">' + c + '</span><span class="card-country-record">' + record + '</span></span></span>';
+            var rounds = getCountryRoundsReached(c);
+            var breakdown = getCountryPointsBreakdown(c);
+            var badges = rounds.length > 0 ? '<span class="card-country-badges">' + rounds.map(function(r) { return '<span class="card-round-badge">' + r + '</span>'; }).join('') + '</span>' : '';
+            var breakdownHtml = breakdown.knockout > 0 ? '<span class="card-country-breakdown">' + breakdown.pool + 'pts pool + ' + breakdown.knockout + 'pts knockout</span>' : '<span class="card-country-breakdown">' + breakdown.pool + 'pts</span>';
+            return '<span class="card-country-tag ' + (elim ? 'eliminated' : '') + '"><span class="flag">' + getFlag(c) + '</span><span class="card-country-info"><span class="card-country-name">' + c + '</span><span class="card-country-record">' + record + '</span>' + breakdownHtml + badges + '</span></span>';
         }).join('');
         return '<div class="player-card ' + rankClass + '"><span class="card-rank-badge ' + rankClass + '">' + p.rank + '</span>' +
             '<div class="card-team-name">' + (p.teamName || '—') + '</div>' +
