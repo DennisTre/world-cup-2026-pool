@@ -209,16 +209,22 @@ function getCountryRecord(name) {
     return (c.wins || 0) + '-' + (c.losses || 0) + '-' + (c.draws || 0);
 }
 
-function getCountryRoundsReached(countryName) {
-    var knockoutRounds = ['R32', 'R16', 'QF', 'SF', 'F'];
-    var reached = [];
-    knockoutRounds.forEach(function(round) {
-        var hasMatch = matchesData.some(function(m) {
-            return m.completed && m.round === round && (m.homeTeam === countryName || m.awayTeam === countryName);
+function getCountryAdvancement(countryName) {
+    var rounds = ['R32', 'R16', 'QF', 'SF', 'F'];
+    var nextRound = { 'R32': 'R16', 'R16': 'QF', 'QF': 'SF', 'SF': 'F', 'F': 'Champion' };
+    var furthest = null;
+    for (var i = rounds.length - 1; i >= 0; i--) {
+        var match = matchesData.find(function(m) {
+            return m.completed && m.round === rounds[i] && (m.homeTeam === countryName || m.awayTeam === countryName);
         });
-        if (hasMatch) reached.push(round);
-    });
-    return reached;
+        if (match) {
+            var won = (match.homeTeam === countryName && match.homeScore > match.awayScore) ||
+                      (match.awayTeam === countryName && match.awayScore > match.homeScore);
+            furthest = won ? nextRound[rounds[i]] : rounds[i];
+            break;
+        }
+    }
+    return furthest;
 }
 
 function getCountryPointsBreakdown(countryName) {
@@ -248,11 +254,11 @@ function renderPlayerCards() {
         const countries = (p.countries || []).map(c => {
             const elim = isEliminated(c);
             const record = getCountryRecord(c);
-            var rounds = getCountryRoundsReached(c);
+            var advancement = getCountryAdvancement(c);
             var breakdown = getCountryPointsBreakdown(c);
-            var badges = rounds.length > 0 ? '<span class="card-country-badges">' + rounds.map(function(r) { return '<span class="card-round-badge">' + r + '</span>'; }).join('') + '</span>' : '';
+            var badge = advancement ? '<span class="card-round-badge">' + advancement + '</span>' : '';
             var breakdownHtml = breakdown.knockout > 0 ? '<span class="card-country-breakdown">' + breakdown.pool + 'pts pool + ' + breakdown.knockout + 'pts knockout</span>' : '<span class="card-country-breakdown">' + breakdown.pool + 'pts</span>';
-            return '<span class="card-country-tag ' + (elim ? 'eliminated' : '') + '"><span class="flag">' + getFlag(c) + '</span><span class="card-country-info"><span class="card-country-name">' + c + '</span><span class="card-country-record">' + record + '</span>' + breakdownHtml + badges + '</span></span>';
+            return '<span class="card-country-tag ' + (elim ? 'eliminated' : '') + '"><span class="flag">' + getFlag(c) + '</span><span class="card-country-info"><span class="card-country-name">' + c + '</span><span class="card-country-record">' + record + '</span>' + breakdownHtml + badge + '</span></span>';
         }).join('');
         return '<div class="player-card ' + rankClass + '"><span class="card-rank-badge ' + rankClass + '">' + p.rank + '</span>' +
             '<div class="card-team-name">' + (p.teamName || '—') + '</div>' +
